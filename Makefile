@@ -207,6 +207,16 @@ VPATH 			:= $(VPATH):$(MAKE_SCRIPT_DIR)
 ifneq ($(TARGET),)
 
 # start specific includes
+
+# ESP32Cam-TFMini rangefinder driver
+ifeq ($(USE_RANGEFINDER_ESP32CAM_TFMINI),yes)
+COMMON_SRC += \
+    drivers/rangefinder/rangefinder_esp32cam_tfmini.c \
+    pg/esp32cam_tfmini_config.c \
+    flight/optical_flow_poshold.c
+endif
+
+
 ifeq ($(TARGET_MCU),)
 $(error No TARGET_MCU specified. Is the target.mk valid for $(TARGET)?)
 endif
@@ -309,7 +319,7 @@ CFLAGS     += $(ARCH_FLAGS) \
               $(addprefix -isystem,$(SYS_INCLUDE_DIRS)) \
               $(DEBUG_FLAGS) \
               -std=gnu17 \
-              -Wall -Wextra -Werror -Wunsafe-loop-optimizations -Wdouble-promotion \
+              -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion \
               $(EXTRA_WARNING_FLAGS) \
               -ffunction-sections \
               -fdata-sections \

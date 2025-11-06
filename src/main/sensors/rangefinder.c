@@ -26,7 +26,9 @@
 #include "platform.h"
 
 #ifdef USE_RANGEFINDER
-
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#include "drivers/rangefinder/rangefinder_esp32cam_tfmini.h"
+#endif
 #include "build/build_config.h"
 #include "build/debug.h"
 
@@ -130,6 +132,16 @@ static bool rangefinderDetect(rangefinderDev_t * dev, uint8_t rangefinderHardwar
             }
             break;
 #endif
+
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    case RANGEFINDER_ESP32CAM_TFMINI:
+        if (esp32camTfminiDetect(dev)) {
+            esp32camTfminiInit(dev);
+            return true;
+        }
+        break;
+#endif
+
 
         case RANGEFINDER_NONE:
             rangefinderHardware = RANGEFINDER_NONE;

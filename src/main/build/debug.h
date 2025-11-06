@@ -129,7 +129,8 @@ typedef enum {
     DEBUG_CHIRP,
     DEBUG_FLASH_TEST_PRBS,
     DEBUG_MAVLINK_TELEMETRY,
-    DEBUG_COUNT
+    DEBUG_COUNT, 
+    DEBUG_OPTICAL_FLOW
 } debugType_e;
 
 extern const char * const debugModeNames[DEBUG_COUNT];

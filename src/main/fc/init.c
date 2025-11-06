@@ -179,6 +179,10 @@
 #include "hardware_revision.h"
 #endif
 
+#if defined(USE_RANGEFINDER)
+#include "sensors/rangefinder.h"  // <-- Ajouter cette ligne si elle n'existe pas
+#endif
+
 #ifdef TARGET_PREINIT
 void targetPreInit(void);
 #endif
@@ -995,6 +999,20 @@ void init(void)
         gpsRescueInit();
     }
 #endif
+
+
+
+#if defined(USE_RANGEFINDER)
+    if (sensors(SENSOR_RANGEFINDER)) {
+        // Configuration spéciale pour ESP32Cam-TFMini à 50Hz
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+        if (rangefinderConfig()->rangefinder_hardware == RANGEFINDER_ESP32CAM_TFMINI) {
+            rescheduleTask(TASK_RANGEFINDER, TASK_PERIOD_HZ(50));
+        }
+#endif
+    }
+#endif
+
 
     debugInit();
 

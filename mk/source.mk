@@ -282,6 +282,14 @@ COMMON_SRC = \
             io/vtx_control.c \
             io/vtx_msp.c \
             cms/cms_menu_vtx_msp.c
+            
+
+ifneq (,$(findstring USE_RANGEFINDER_ESP32CAM_TFMINI,$(EXTRA_FLAGS)))
+COMMON_SRC += \
+    drivers/rangefinder/rangefinder_esp32cam_tfmini.c \
+    pg/esp32cam_tfmini_config.c \
+    flight/optical_flow_poshold.c
+endif
 
 ifneq ($(SIMULATOR_BUILD),yes)
 
@@ -421,6 +429,16 @@ endif
 ifeq ($(RAM_BASED),yes)
 TARGET_FLAGS += -DUSE_EXST -DCONFIG_IN_RAM -DRAMBASED
 endif
+
+
+# ESP32Cam-TFMini rangefinder
+ifeq ($(USE_RANGEFINDER_ESP32CAM_TFMINI),yes)
+COMMON_SRC += \
+    drivers/rangefinder/rangefinder_esp32cam_tfmini.c \
+    pg/esp32cam_tfmini_config.c \
+    flight/optical_flow_poshold.c
+endif
+
 
 ifeq ($(SIMULATOR_BUILD),yes)
 TARGET_FLAGS += -DSIMULATOR_BUILD
