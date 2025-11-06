@@ -113,6 +113,7 @@
 #include "pg/rcdevice.h"
 #include "pg/stats.h"
 #include "pg/board.h"
+#include "pg/esp32cam_tfmini_config.h"
 
 #include "rx/a7105_flysky.h"
 #include "rx/cc2500_frsky_common.h"
@@ -216,6 +217,12 @@ const char * const lookupTableRangefinderHardware[] = {
 #if defined(USE_SENSOR_NAMES) || defined(USE_OPTICALFLOW)
 const char * const lookupTableOpticalflowHardware[] = {
     "NONE", "MT"
+};
+#endif
+
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+static const char * const lookupTableEsp32camTfminiAlignment[] = {
+    "DEFAULT", "CW90", "CW180", "CW270", "CW0FLIP", "CW90FLIP", "CW180FLIP", "CW270FLIP"
 };
 #endif
 
@@ -673,6 +680,9 @@ const lookupTableEntry_t lookupTables[] = {
 #endif
 #ifdef USE_OPTICALFLOW
     LOOKUP_TABLE_ENTRY(lookupTableOpticalflowHardware),
+#endif
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    LOOKUP_TABLE_ENTRY(lookupTableEsp32camTfminiAlignment),
 #endif
 #ifdef USE_GYRO_OVERFLOW_CHECK
     LOOKUP_TABLE_ENTRY(lookupTableGyroOverflowCheck),
@@ -1822,6 +1832,17 @@ const clivalue_t valueTable[] = {
     { "opticalflow_rotation",     VAR_INT16  | MASTER_VALUE ,              .config.minmaxUnsigned = {0, 359},               PG_OPTICALFLOW_CONFIG, offsetof(opticalflowConfig_t, rotation) },
     { "opticalflow_lpf",          VAR_UINT16 | MASTER_VALUE ,              .config.minmaxUnsigned = {0, 10000},             PG_OPTICALFLOW_CONFIG, offsetof(opticalflowConfig_t, flow_lpf) },
     { "opticalflow_flip_x",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },               PG_OPTICALFLOW_CONFIG, offsetof(opticalflowConfig_t, flip_x) },
+#endif
+
+// PG_ESP32CAM_TFMINI_CONFIG
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    { "esp32cam_tfmini_alignment",        VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ESP32CAM_TFMINI_ALIGNMENT }, PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, alignment) },
+    { "esp32cam_tfmini_flow_scale",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, opticalFlowScale) },
+    { "esp32cam_tfmini_range_scale",      VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, rangefinderScale) },
+    { "esp32cam_tfmini_min_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, minAltitudeCm) },
+    { "esp32cam_tfmini_max_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, maxAltitudeCm) },
+    { "esp32cam_tfmini_flow_invert_x",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertX) },
+    { "esp32cam_tfmini_flow_invert_y",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertY) },
 #endif
 
 // PG_PINIO_CONFIG
