@@ -146,10 +146,10 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     }
     
     // Update DEBUG values for monitoring
-    DEBUG_SET(DEBUG_RANGEFINDER, 0, packet->distance);
-    DEBUG_SET(DEBUG_RANGEFINDER, 1, packet->velocity_x / 10);  // Scale for visibility
-    DEBUG_SET(DEBUG_RANGEFINDER, 2, packet->velocity_y / 10);
-    DEBUG_SET(DEBUG_RANGEFINDER, 3, sensorState.goodPackets & 0xFFFF);
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, packet->distance);
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, packet->velocity_x / 10);  // Scale for visibility
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, packet->velocity_y / 10);
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 3, sensorState.goodPackets & 0xFFFF);
 }
 
 // Parse incoming serial data
