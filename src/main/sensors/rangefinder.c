@@ -134,12 +134,12 @@ static bool rangefinderDetect(rangefinderDev_t * dev, uint8_t rangefinderHardwar
 #endif
 
 #ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-    case RANGEFINDER_ESP32CAM_TFMINI:
-        if (esp32camTfminiDetect(dev)) {
-            esp32camTfminiInit(dev);
-            return true;
-        }
-        break;
+        case RANGEFINDER_ESP32CAM_TFMINI:
+            if (esp32camTfminiDetect(dev)) {
+                esp32camTfminiInit(dev);
+                 rangefinderHardware = RANGEFINDER_ESP32CAM_TFMINI;
+            }
+            break;
 #endif
 
 
