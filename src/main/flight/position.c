@@ -43,12 +43,16 @@
 
 #include "sensors/sensors.h"
 #include "sensors/barometer.h"
+#ifdef USE_RANGEFINDER
+#include "sensors/rangefinder.h"
+#endif
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
 
 static float displayAltitudeCm = 0.0f;
 static bool altitudeAvailable = false;
+static uint8_t altitudeSourceUsed = 0; // 0 = GPS+baro, 1 = rangefinder
 
 static float zeroedAltitudeCm = 0.0f;
 static float zeroedAltitudeDerivative = 0.0f;
@@ -249,3 +253,28 @@ int16_t getEstimatedVario(void)
     return estimatedVario;
 }
 #endif
+
+// Get altitude for ALTITUDE_HOLD mode, prioritizing rangefinder if available
+float getAltitudeCmForAltHold(void)
+{
+#ifdef USE_RANGEFINDER
+    if (sensors(SENSOR_RANGEFINDER)) {
+        const int32_t rangefinderAlt = rangefinderGetLatestAltitude();
+        // Check if rangefinder data is valid (not out of range or hardware failure)
+        if (rangefinderAlt > 0 && rangefinderIsHealthy()) {
+            altitudeSourceUsed = 1; // Using rangefinder
+            return (float)rangefinderAlt;
+        }
+    }
+#endif
+    // Fall back to GPS+baro altitude
+    altitudeSourceUsed = 0; // Using GPS+baro
+    return zeroedAltitudeCm;
+}
+
+// Get the altitude source currently used (for debug purposes)
+// Returns: 1 if rangefinder is used, 0 if GPS+baro is used
+uint8_t getAltitudeSourceUsed(void)
+{
+    return altitudeSourceUsed;
+}
