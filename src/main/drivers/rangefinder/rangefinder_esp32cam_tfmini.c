@@ -47,6 +47,7 @@
 #include "io/serial.h"
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
+#include "pg/esp32cam_tfmini_config.h"
 
 // Parser state machine
 typedef enum {
@@ -70,8 +71,8 @@ typedef struct {
     bool distanceValid;
 
     // Optical flow data
-    float flowRateX;        // rad/s
-    float flowRateY;        // rad/s
+    float flowRateX;        // rad/s (after transformations)
+    float flowRateY;        // rad/s (after transformations)
     bool flowValid;
 
     // Statistics
@@ -102,6 +103,69 @@ static uint8_t calculateChecksum(const uint8_t *data, size_t len)
     return checksum;
 }
 
+// Apply configuration transformations to flow data
+static void applyFlowTransformations(float *flowX, float *flowY, float altitude_cm)
+{
+    const esp32camTfminiConfig_t *config = esp32camTfminiConfig();
+    
+    // Check altitude limits for flow validity
+    if (config->minAltitudeCm > 0 && altitude_cm < config->minAltitudeCm) {
+        *flowX = 0.0f;
+        *flowY = 0.0f;
+        return;
+    }
+    if (config->maxAltitudeCm > 0 && altitude_cm > config->maxAltitudeCm) {
+        *flowX = 0.0f;
+        *flowY = 0.0f;
+        return;
+    }
+    
+    // Apply scaling factor (stored as percentage 0-200, default 100)
+    float scaleFactor = config->opticalFlowScale / 100.0f;
+    *flowX *= scaleFactor;
+    *flowY *= scaleFactor;
+    
+    // Apply axis inversions
+    if (config->flowInvertX) {
+        *flowX = -*flowX;
+    }
+    if (config->flowInvertY) {
+        *flowY = -*flowY;
+    }
+    
+    // Apply rotation based on alignment
+    float rotatedX = *flowX;
+    float rotatedY = *flowY;
+    
+    switch (config->alignment) {
+        case ESP32CAM_TFMINI_ALIGN_DEFAULT:
+        case ESP32CAM_TFMINI_ALIGN_CW0_FLIP:
+            // No rotation needed (flip already handled by invert flags)
+            break;
+            
+        case ESP32CAM_TFMINI_ALIGN_CW90:
+        case ESP32CAM_TFMINI_ALIGN_CW90_FLIP:
+            // 90° clockwise rotation: X' = -Y, Y' = X
+            *flowX = -rotatedY;
+            *flowY = rotatedX;
+            break;
+            
+        case ESP32CAM_TFMINI_ALIGN_CW180:
+        case ESP32CAM_TFMINI_ALIGN_CW180_FLIP:
+            // 180° rotation: X' = -X, Y' = -Y
+            *flowX = -rotatedX;
+            *flowY = -rotatedY;
+            break;
+            
+        case ESP32CAM_TFMINI_ALIGN_CW270:
+        case ESP32CAM_TFMINI_ALIGN_CW270_FLIP:
+            // 270° clockwise rotation: X' = Y, Y' = -X
+            *flowX = rotatedY;
+            *flowY = -rotatedX;
+            break;
+    }
+}
+
 // Process received data packet
 static void processPacket(esp32camTfminiPacket_t *packet)
 {
@@ -122,9 +186,11 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     sensorState.goodPackets++;
     sensorState.lastUpdateTime = millis();
     
-    // Update rangefinder distance
-    sensorState.distance = packet->distance;
-    sensorState.distanceValid = (packet->distance > 0 && packet->distance < 1200);
+    // Update rangefinder distance with scaling
+    const esp32camTfminiConfig_t *config = esp32camTfminiConfig();
+    float rangeScale = config->rangefinderScale / 100.0f;
+    sensorState.distance = (int32_t)(packet->distance * rangeScale);
+    sensorState.distanceValid = (sensorState.distance > 0 && sensorState.distance < 1200);
     
     // Update optical flow data
     // Convert from mm/s * 1000 to m/s, then to rad/s
@@ -136,20 +202,28 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     // flowRate (rad/s) = velocity (m/s) / distance (m)
     if (sensorState.distanceValid && packet->distance > 10) {
         float distance_m = packet->distance / 100.0f;  // Convert cm to m
-        sensorState.flowRateX = velX_m_s / distance_m;
-        sensorState.flowRateY = velY_m_s / distance_m;
-        sensorState.flowValid = true;
+        float rawFlowX = velX_m_s / distance_m;
+        float rawFlowY = velY_m_s / distance_m;
+        
+        // Apply all transformations (rotation, inversion, scaling, altitude limits)
+        sensorState.flowRateX = rawFlowX;
+        sensorState.flowRateY = rawFlowY;
+        applyFlowTransformations(&sensorState.flowRateX, &sensorState.flowRateY, 
+                                 (float)packet->distance);
+        
+        // Flow is valid if at least one axis is non-zero after transformations
+        sensorState.flowValid = (sensorState.flowRateX != 0.0f || sensorState.flowRateY != 0.0f);
     } else {
         sensorState.flowRateX = 0.0f;
         sensorState.flowRateY = 0.0f;
         sensorState.flowValid = false;
     }
     
-    // Update DEBUG values for monitoring
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, packet->distance);
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, packet->velocity_x / 10);  // Scale for visibility
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, packet->velocity_y / 10);
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 3, sensorState.goodPackets & 0xFFFF);
+    // Update DEBUG values - show TRANSFORMED values (what actually gets used)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, sensorState.distance);  // Scaled distance
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, (int32_t)(sensorState.flowRateX * 1000));  // Transformed flowX
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, (int32_t)(sensorState.flowRateY * 1000));  // Transformed flowY
+
 }
 
 // Parse incoming serial data
@@ -158,45 +232,34 @@ static void esp32camTfminiParse(uint8_t c)
     switch (sensorState.state) {
         case STATE_WAIT_HEADER1:
             if (c == ESP32CAM_TFMINI_HEADER1) {
-                sensorState.packet.header1 = c;
                 sensorState.state = STATE_WAIT_HEADER2;
             }
             break;
-            
+
         case STATE_WAIT_HEADER2:
             if (c == ESP32CAM_TFMINI_HEADER2) {
-                sensorState.packet.header2 = c;
-                sensorState.dataIndex = 0;
                 sensorState.state = STATE_READ_DATA;
+                sensorState.dataIndex = 0;
             } else {
                 sensorState.state = STATE_WAIT_HEADER1;
             }
             break;
-            
+
         case STATE_READ_DATA:
-            {
-                uint8_t *dataPtr = (uint8_t *)&sensorState.packet.timestamp_ms;
-                dataPtr[sensorState.dataIndex++] = c;
-                
-                // Check if we have received all data + checksum
-                const size_t expectedBytes = sizeof(sensorState.packet.timestamp_ms) + 
-                                            sizeof(sensorState.packet.velocity_x) + 
-                                            sizeof(sensorState.packet.velocity_y) + 
-                                            sizeof(sensorState.packet.distance) + 
-                                            sizeof(sensorState.packet.checksum);
-                
-                if (sensorState.dataIndex >= expectedBytes) {
-                    processPacket(&sensorState.packet);
-                    sensorState.state = STATE_WAIT_HEADER1;
-                }
+            ((uint8_t*)&sensorState.packet.timestamp_ms)[sensorState.dataIndex++] = c;
+            
+            if (sensorState.dataIndex >= (sizeof(sensorState.packet) - 2)) { // -2 for headers
+                processPacket(&sensorState.packet);
+                sensorState.state = STATE_WAIT_HEADER1;
             }
             break;
     }
 }
 
-// Detection function
+// Detection interface for rangefinder system
 bool esp32camTfminiDetect(rangefinderDev_t *rangefinder)
 {
+    // Find and open the serial port for ESP32CAM-TFMini
     const serialPortConfig_t *portConfig = findSerialPortConfig(FUNCTION_ESP32CAM_TFMINI);
     if (!portConfig) {
         return false;
@@ -207,7 +270,8 @@ bool esp32camTfminiDetect(rangefinderDev_t *rangefinder)
         return false;
     }
 
-    rangefinder->delayMs = 10;  // 50Hz update rate = 20ms, use 10ms for scheduler
+    // Set detection cone
+    rangefinder->delayMs = 20;  // 50Hz update rate = 20ms, use 10ms for scheduler
     rangefinder->maxRangeCm = 1200;  // TFMini max range
     rangefinder->detectionConeDeciDegrees = ESP32CAM_TFMINI_DETECTION_CONE_DECIDEGREES;
     rangefinder->detectionConeExtendedDeciDegrees = ESP32CAM_TFMINI_DETECTION_CONE_EXTENDED_DECIDEGREES;
@@ -233,6 +297,8 @@ void esp32camTfminiInit(rangefinderDev_t *rangefinder)
 // Update function called by scheduler
 void esp32camTfminiUpdate(rangefinderDev_t *rangefinder)
 {
+    UNUSED(rangefinder);
+    
     // Process all available serial data
     if (esp32camTfminiSerialPort) {
         while (serialRxBytesWaiting(esp32camTfminiSerialPort) > 0) {
