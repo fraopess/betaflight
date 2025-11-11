@@ -30,13 +30,14 @@
 
 // Packet structure (binary protocol)
 // [0xAA][0x55][timestamp(4)][velocity_x(2)][velocity_y(2)][distance(2)][checksum(1)]
+// IMPORTANT: All distance/altitude values are in CENTIMETERS
 typedef struct __attribute__((packed)) {
     uint8_t header1;                    // 0xAA
     uint8_t header2;                    // 0x55
     uint32_t timestamp_ms;              // Timestamp in milliseconds
     int16_t velocity_x;                 // X velocity in mm/s * 1000
     int16_t velocity_y;                 // Y velocity in mm/s * 1000
-    uint16_t distance;                  // Distance in cm
+    uint16_t distance;                  // Distance in CENTIMETERS (cm)
     uint8_t checksum;                   // XOR checksum
 } esp32camTfminiPacket_t;
 

@@ -142,7 +142,8 @@ static void altHoldUpdate(void)
     altitudeControl(altHold.targetAltitudeCm, taskIntervalSeconds, altHold.targetVelocity);
 
     // Debug: indicate which altitude source is being used (1 = rangefinder, 0 = GPS+baro)
-    DEBUG_SET(DEBUG_ALTITUDE, 7, getAltitudeSourceUsed());
+    DEBUG_SET(DEBUG_ALTITUDE, 4, getAltitudeSourceUsed());
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 4, getAltitudeSourceUsed());
 }
 
 void updateAltHold(timeUs_t currentTimeUs) {
