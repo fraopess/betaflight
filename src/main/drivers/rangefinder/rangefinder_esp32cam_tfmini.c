@@ -66,8 +66,8 @@ typedef struct {
     uint8_t dataIndex;
     uint32_t lastUpdateTime;
 
-    // Rangefinder data
-    int32_t distance;
+    // Rangefinder data (units: centimeters)
+    int32_t distance;           // Distance in centimeters
     bool distanceValid;
 
     // Optical flow data
@@ -104,6 +104,7 @@ static uint8_t calculateChecksum(const uint8_t *data, size_t len)
 }
 
 // Apply configuration transformations to flow data
+// altitude_cm: altitude in centimeters (for validity checks)
 static void applyFlowTransformations(float *flowX, float *flowY, float altitude_cm)
 {
     const esp32camTfminiConfig_t *config = esp32camTfminiConfig();
@@ -187,10 +188,11 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     sensorState.lastUpdateTime = millis();
     
     // Update rangefinder distance with scaling
+    // packet->distance is in cm, sensorState.distance is in cm
     const esp32camTfminiConfig_t *config = esp32camTfminiConfig();
     float rangeScale = config->rangefinderScale / 100.0f;
-    sensorState.distance = (int32_t)(packet->distance * rangeScale);
-    sensorState.distanceValid = (sensorState.distance > 0 && sensorState.distance < 1200);
+    sensorState.distance = (int32_t)(packet->distance * rangeScale);  // Result in cm
+    sensorState.distanceValid = (sensorState.distance > 0 && sensorState.distance < 1200);  // Max 1200cm = 12m
     
     // Update optical flow data
     // Convert from mm/s * 1000 to m/s, then to rad/s
@@ -200,17 +202,17 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     
     // Convert linear velocity to angular rate using distance
     // flowRate (rad/s) = velocity (m/s) / distance (m)
-    if (sensorState.distanceValid && packet->distance > 10) {
-        float distance_m = packet->distance / 100.0f;  // Convert cm to m
+    if (sensorState.distanceValid && packet->distance > 10) {  // packet->distance is in cm
+        float distance_m = packet->distance / 100.0f;  // Convert from cm to m
         float rawFlowX = velX_m_s / distance_m;
         float rawFlowY = velY_m_s / distance_m;
-        
+
         // Apply all transformations (rotation, inversion, scaling, altitude limits)
         sensorState.flowRateX = rawFlowX;
         sensorState.flowRateY = rawFlowY;
-        applyFlowTransformations(&sensorState.flowRateX, &sensorState.flowRateY, 
-                                 (float)packet->distance);
-        
+        applyFlowTransformations(&sensorState.flowRateX, &sensorState.flowRateY,
+                                 (float)packet->distance);  // Pass distance in cm
+
         // Flow is valid if at least one axis is non-zero after transformations
         sensorState.flowValid = (sensorState.flowRateX != 0.0f || sensorState.flowRateY != 0.0f);
     } else {
@@ -220,9 +222,9 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     }
     
     // Update DEBUG values - show TRANSFORMED values (what actually gets used)
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, sensorState.distance);  // Scaled distance
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, (int32_t)(sensorState.flowRateX * 1000));  // Transformed flowX
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, (int32_t)(sensorState.flowRateY * 1000));  // Transformed flowY
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, sensorState.distance);  // Distance in cm (scaled)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, (int32_t)(sensorState.flowRateX * 1000));  // Transformed flowX (mrad/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, (int32_t)(sensorState.flowRateY * 1000));  // Transformed flowY (mrad/s)
 
 }
 
@@ -315,11 +317,11 @@ void esp32camTfminiUpdate(rangefinderDev_t *rangefinder)
     }
 }
 
-// Read function - returns the most recent distance measurement
+// Read function - returns the most recent distance measurement in centimeters
 int32_t esp32camTfminiRead(rangefinderDev_t *rangefinder)
 {
     UNUSED(rangefinder);
-    return sensorState.distance;
+    return sensorState.distance;  // Returns distance in cm
 }
 
 // Optical flow data access functions

@@ -45,12 +45,13 @@ typedef enum {
     ESP32CAM_TFMINI_ALIGN_CW270_FLIP,       // CW270 with flip
 } esp32camTfminiAlignment_e;
 
+// All distance/altitude values are in CENTIMETERS (consistent with baro/GPS)
 typedef struct esp32camTfminiConfig_s {
     uint8_t alignment;                      // Sensor orientation
     uint8_t opticalFlowScale;               // Scale factor for optical flow (0-200%, default 100)
     uint8_t rangefinderScale;               // Scale factor for rangefinder (0-200%, default 100)
-    uint8_t minAltitudeCm;                  // Minimum altitude for valid optical flow (cm)
-    uint8_t maxAltitudeCm;                  // Maximum altitude for valid optical flow (cm, 0 = use sensor max)
+    uint8_t minAltitudeCm;                  // Minimum altitude for valid optical flow (CENTIMETERS)
+    uint8_t maxAltitudeCm;                  // Maximum altitude for valid optical flow (CENTIMETERS, 0 = use sensor max)
     bool flowInvertX;                       // Invert X axis flow
     bool flowInvertY;                       // Invert Y axis flow
 } esp32camTfminiConfig_t;

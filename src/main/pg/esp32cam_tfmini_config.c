@@ -33,13 +33,15 @@
 
 PG_REGISTER_WITH_RESET_FN(esp32camTfminiConfig_t, esp32camTfminiConfig, PG_ESP32CAM_TFMINI_CONFIG, 0);
 
+// Default configuration values
+// NOTE: All altitude/distance values are in CENTIMETERS (consistent with baro/GPS)
 void pgResetFn_esp32camTfminiConfig(esp32camTfminiConfig_t *config)
 {
     config->alignment = ESP32CAM_TFMINI_ALIGN_DEFAULT;  // No rotation
     config->opticalFlowScale = 100;      // 100% = no scaling
     config->rangefinderScale = 100;      // 100% = no scaling
     config->minAltitudeCm = 10;          // 10cm minimum altitude for valid flow
-    config->maxAltitudeCm = 0;           // 0 = use sensor max (1200cm for TFMini)
+    config->maxAltitudeCm = 0;           // 0 = use sensor max (1200cm = 12m for TFMini)
     config->flowInvertX = false;         // Don't invert X axis
     config->flowInvertY = false;         // Don't invert Y axis
 }
