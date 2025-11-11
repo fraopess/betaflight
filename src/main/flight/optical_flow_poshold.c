@@ -1,8 +1,14 @@
 /*
  * Implementation of optical flow position estimation and control
- * 
+ *
  * This integrates ESP32Cam-TFMini optical flow with IMU data for
  * position hold and altitude hold flight modes.
+ *
+ * Key features:
+ * - Gyroscopic compensation: Subtracts drone rotation from optical flow
+ * - Body to Earth frame transformation
+ * - Tilt compensation for accurate ground velocity estimation
+ * - Position integration with drift compensation
  */
 
 #include "platform.h"
@@ -45,6 +51,8 @@ static bool posHoldActive = false;
 #define VELOCITY_FILTER_CUTOFF_HZ   5.0f
 #define POSITION_UPDATE_RATE_HZ     50.0f
 #define POSITION_UPDATE_DT          (1.0f / POSITION_UPDATE_RATE_HZ)
+#define MIN_VALID_ALTITUDE_CM       10.0f   // Minimum altitude for valid flow (10cm)
+#define MAX_VALID_ALTITUDE_CM       1200.0f // Maximum altitude for valid flow (12m)
 
 // Initialize optical flow position estimation
 void opticalFlowInit(void)
@@ -70,66 +78,85 @@ void opticalFlowUpdate(void)
         posEstimate.valid = false;
         return;
     }
-    
-    // Get flow rates (rad/s)
-    float flowRateX = esp32camTfminiGetFlowRateX();
-    float flowRateY = esp32camTfminiGetFlowRateY();
-    
-    // Get altitude from rangefinder
-    float altitude = rangefinderGetLatestAltitude() / 100.0f;  // Convert cm to m
-    
+
+    // Get altitude from rangefinder (in cm, convert to m)
+    float altitudeCm = rangefinderGetLatestAltitude();
+    float altitude = altitudeCm / 100.0f;
+
     // Check altitude validity
-    if (altitude < 0.1f || altitude > 12.0f) {
+    if (altitudeCm < MIN_VALID_ALTITUDE_CM || altitudeCm > MAX_VALID_ALTITUDE_CM) {
         posEstimate.valid = false;
         return;
     }
-    
-    // Convert flow rates to velocities (m/s)
+
+    // Get raw optical flow rates (rad/s) - these include drone rotation
+    float flowRateX = esp32camTfminiGetFlowRateX();
+    float flowRateY = esp32camTfminiGetFlowRateY();
+
+    // *** GYROSCOPIC COMPENSATION ***
+    // Subtract gyro rotation rates to get pure translational flow
+    // gyro.gyroADCf is in deg/s, convert to rad/s
+    const float DEG_TO_RAD = 0.017453292f;
+    float gyroRateX = gyro.gyroADCf[FD_ROLL] * DEG_TO_RAD;  // Roll rate (rad/s)
+    float gyroRateY = gyro.gyroADCf[FD_PITCH] * DEG_TO_RAD; // Pitch rate (rad/s)
+
+    // Compensate: subtract gyro rotation from optical flow
+    // The camera sees apparent motion due to rotation, we remove it
+    float compensatedFlowX = flowRateX - gyroRateX;
+    float compensatedFlowY = flowRateY - gyroRateY;
+
+    // Convert compensated flow rates to ground velocities (m/s)
     // velocity = flowRate (rad/s) * altitude (m)
-    float velX = flowRateX * altitude;
-    float velY = flowRateY * altitude;
-    
-    // Apply rotation based on IMU orientation
-    // Get current attitude
-    float roll = attitude.values.roll / 10.0f * RAD;   // Convert decidegrees to radians
-    float pitch = attitude.values.pitch / 10.0f * RAD;
-    float yaw = attitude.values.yaw / 10.0f * RAD;
-    
-    // Rotate velocities to body frame
-    // This compensates for aircraft tilt
-    float cosYaw = cos_approx(yaw);
-    float sinYaw = sin_approx(yaw);
-    
-    float velBodyX = velX * cosYaw - velY * sinYaw;
-    float velBodyY = velX * sinYaw + velY * cosYaw;
-    
-    // Apply tilt compensation
+    float velCameraX = compensatedFlowX * altitude;
+    float velCameraY = compensatedFlowY * altitude;
+
+    // *** BODY TO EARTH FRAME TRANSFORMATION ***
+    // Get current attitude (in decidegrees, convert to radians)
+    float roll = attitude.values.roll * 0.1f * DEG_TO_RAD;
+    float pitch = attitude.values.pitch * 0.1f * DEG_TO_RAD;
+    float yaw = attitude.values.yaw * 0.1f * DEG_TO_RAD;
+
+    // Apply tilt compensation first (project camera velocity to ground plane)
     float cosPitch = cos_approx(pitch);
     float cosRoll = cos_approx(roll);
-    
-    if (cosPitch > 0.1f && cosRoll > 0.1f) {
-        velBodyX /= cosPitch;
-        velBodyY /= cosRoll;
+    float cosTilt = cosPitch * cosRoll; // Combined tilt factor
+
+    // Only proceed if tilt is not too extreme (< 80 degrees)
+    if (cosTilt < 0.17f) { // cos(80°) ≈ 0.17
+        posEstimate.valid = false;
+        return;
     }
-    
-    // Filter velocities
-    posEstimate.velocityX = pt1FilterApply(&velocityXFilter, velBodyX);
-    posEstimate.velocityY = pt1FilterApply(&velocityYFilter, velBodyY);
-    
-    // Integrate velocities to get position (simple integration)
+
+    // Compensate for tilt to get ground velocity
+    float velBodyX = velCameraX / cosTilt;
+    float velBodyY = velCameraY / cosTilt;
+
+    // Rotate from body frame to earth frame using yaw angle
+    float cosYaw = cos_approx(yaw);
+    float sinYaw = sin_approx(yaw);
+
+    // Earth frame velocities (North-East reference)
+    float velEarthX = velBodyX * cosYaw - velBodyY * sinYaw;  // East velocity
+    float velEarthY = velBodyX * sinYaw + velBodyY * cosYaw;  // North velocity
+
+    // Filter velocities to reduce noise
+    posEstimate.velocityX = pt1FilterApply(&velocityXFilter, velEarthX);
+    posEstimate.velocityY = pt1FilterApply(&velocityYFilter, velEarthY);
+
+    // Integrate velocities to get position (dead reckoning)
     posEstimate.positionX += posEstimate.velocityX * POSITION_UPDATE_DT;
     posEstimate.positionY += posEstimate.velocityY * POSITION_UPDATE_DT;
-    
-    // Store altitude
+
+    // Store altitude and update timestamp
     posEstimate.altitude = altitude;
     posEstimate.lastUpdate = millis();
     posEstimate.valid = true;
-    
-    // Update DEBUG values
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 0, (int)(posEstimate.velocityX * 100));  // cm/s
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 1, (int)(posEstimate.velocityY * 100));
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 2, (int)(posEstimate.positionX * 100));  // cm
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 3, (int)(posEstimate.positionY * 100));
+
+    // Update DEBUG values for blackbox/configurator
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 0, (int)(posEstimate.velocityX * 100));  // East velocity (cm/s)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 1, (int)(posEstimate.velocityY * 100));  // North velocity (cm/s)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 2, (int)(posEstimate.positionX * 100));  // East position (cm)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 3, (int)(posEstimate.positionY * 100));  // North position (cm)
 }
 
 // Get current position estimate
@@ -183,18 +210,55 @@ float getPositionHoldVelocityY(void)
     if (!posEstimate.valid || !posHoldActive) {
         return 0.0f;
     }
-    
+
     // Simple P controller for position hold
     const float kP = 0.5f;  // Position gain (adjust via PID tuning)
     const float maxVelocity = 2.0f;  // Maximum velocity (m/s)
-    
+
     float positionError = posHoldSetpointY - posEstimate.positionY;
     float desiredVelocity = positionError * kP;
-    
+
     // Limit velocity
     desiredVelocity = constrainf(desiredVelocity, -maxVelocity, maxVelocity);
-    
+
     return desiredVelocity;
+}
+
+// Reset position estimate to zero (called when activating position hold)
+void opticalFlowResetPosition(void)
+{
+    posEstimate.positionX = 0.0f;
+    posEstimate.positionY = 0.0f;
+    posEstimate.velocityX = 0.0f;
+    posEstimate.velocityY = 0.0f;
+
+    // Reset filters by clearing their internal state
+    velocityXFilter.state = 0.0f;
+    velocityYFilter.state = 0.0f;
+}
+
+// Set target position for position hold
+void opticalFlowSetPositionTarget(float targetX, float targetY)
+{
+    posHoldSetpointX = targetX;
+    posHoldSetpointY = targetY;
+}
+
+// Activate or deactivate position hold mode
+void opticalFlowActivatePositionHold(bool activate)
+{
+    if (activate && !posHoldActive) {
+        // Activating: set current position as target
+        posHoldSetpointX = posEstimate.positionX;
+        posHoldSetpointY = posEstimate.positionY;
+    }
+    posHoldActive = activate;
+}
+
+// Check if optical flow position is valid
+bool opticalFlowIsPositionValid(void)
+{
+    return posEstimate.valid;
 }
 
 #endif // USE_RANGEFINDER_ESP32CAM_TFMINI

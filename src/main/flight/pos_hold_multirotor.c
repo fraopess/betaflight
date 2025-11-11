@@ -39,12 +39,24 @@
 #include "pg/pos_hold.h"
 #include "pos_hold.h"
 
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#include "flight/optical_flow_poshold.h"
+#include "sensors/rangefinder.h"
+#endif
+
+typedef enum {
+    POS_HOLD_SOURCE_NONE = 0,
+    POS_HOLD_SOURCE_GPS,
+    POS_HOLD_SOURCE_OPTICAL_FLOW
+} posHoldSource_e;
+
 typedef struct posHoldState_s {
     bool isEnabled;
     bool isControlOk;
     bool areSensorsOk;
     float deadband;
     bool useStickAdjustment;
+    posHoldSource_e source;  // Which sensor is being used for position hold
 } posHoldState_t;
 
 static posHoldState_t posHold;
@@ -66,36 +78,80 @@ static void posHoldCheckSticks(void)
 
 static bool sensorsOk(void)
 {
-    if (!STATE(GPS_FIX)) {
-        return false;
-    }
-    if (
+    // First priority: GPS with sufficient satellites
+    if (STATE(GPS_FIX) && gpsSol.numSat >= GPS_MIN_SAT_COUNT) {
+        // Check compass if required
+        if (
 #ifdef USE_MAG
-        !compassIsHealthy() &&
+            !compassIsHealthy() &&
 #endif
-        (!posHoldConfig()->posHoldWithoutMag || !canUseGPSHeading)) {
-        return false;
+            (!posHoldConfig()->posHoldWithoutMag || !canUseGPSHeading)) {
+            // Compass required but not healthy, try optical flow fallback
+            goto tryOpticalFlow;
+        }
+        posHold.source = POS_HOLD_SOURCE_GPS;
+        return true;
     }
-    return true;
+
+tryOpticalFlow:
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    // Fallback: Optical flow if GPS is not available or insufficient
+    if (isOpticalFlowAvailable()) {
+        posHold.source = POS_HOLD_SOURCE_OPTICAL_FLOW;
+        return true;
+    }
+#endif
+
+    // No valid position source
+    posHold.source = POS_HOLD_SOURCE_NONE;
+    return false;
 }
 
 void updatePosHold(timeUs_t currentTimeUs) {
     UNUSED(currentTimeUs);
     if (FLIGHT_MODE(POS_HOLD_MODE)) {
         if (!posHold.isEnabled) {
-            resetPositionControl(&gpsSol.llh, POSHOLD_TASK_RATE_HZ); // sets target location to current location
-            posHold.isControlOk = true;
-            posHold.isEnabled = true;
+            // Check which sensor source is available
+            posHold.areSensorsOk = sensorsOk();
+
+            if (posHold.areSensorsOk) {
+                // Initialize the appropriate controller
+                if (posHold.source == POS_HOLD_SOURCE_GPS) {
+                    resetPositionControl(&gpsSol.llh, POSHOLD_TASK_RATE_HZ);
+                }
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+                else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
+                    resetPositionControlOpticalFlow(POSHOLD_TASK_RATE_HZ);
+                }
+#endif
+                posHold.isControlOk = true;
+                posHold.isEnabled = true;
+            }
         }
     } else {
         posHold.isEnabled = false;
+        posHold.source = POS_HOLD_SOURCE_NONE;
     }
 
     if (posHold.isEnabled && posHold.isControlOk) {
+        // Re-check sensors each cycle (allows switching between GPS and optical flow)
         posHold.areSensorsOk = sensorsOk();
+
         if (posHold.areSensorsOk) {
             posHoldCheckSticks();
-            posHold.isControlOk = positionControl(); // false only on sanity check failure
+
+            // Use the appropriate position controller based on source
+            if (posHold.source == POS_HOLD_SOURCE_GPS) {
+                posHold.isControlOk = positionControl();
+            }
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+            else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
+                posHold.isControlOk = positionControlOpticalFlow();
+            }
+#endif
+            else {
+                posHold.isControlOk = false;
+            }
         }
     }
 }

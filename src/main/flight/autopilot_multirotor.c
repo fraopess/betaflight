@@ -36,9 +36,15 @@
 #include "flight/position.h"
 #include "rx/rx.h"
 #include "sensors/gyro.h"
+#include "sensors/sensors.h"
 
 #include "pg/autopilot.h"
 #include "autopilot.h"
+
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#include "flight/optical_flow_poshold.h"
+#include "sensors/rangefinder.h"
+#endif
 
 #define ALTITUDE_P_SCALE  0.01f
 #define ALTITUDE_I_SCALE  0.003f
@@ -397,5 +403,136 @@ bool isAutopilotInControl(void)
 {
     return !ap.sticksActive;
 }
+
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+/*
+ * Position control using optical flow instead of GPS
+ * This is used as a fallback when GPS is not available or has insufficient satellites
+ */
+
+typedef struct opticalFlowAutopilotState_s {
+    vector2_t targetPosition;       // Target position in cm (X=East, Y=North)
+    float maxAngle;
+    vector2_t pidSumBF;             // PID output in body frame
+    pt3Filter_t upsampleLpfBF[RP_AXIS_COUNT];
+    float upsampleLpfGain;
+    bool initialized;
+} opticalFlowAutopilotState_t;
+
+static opticalFlowAutopilotState_t ofAp = {
+    .maxAngle = 30.0f,
+    .upsampleLpfGain = 1.0f,
+    .initialized = false,
+};
+
+// Reset optical flow position control (called when entering POS_HOLD with optical flow)
+void resetPositionControlOpticalFlow(unsigned taskRateHz)
+{
+    // Reset optical flow position to zero
+    opticalFlowResetPosition();
+
+    // Set target to current position (0, 0 since we just reset)
+    ofAp.targetPosition = (vector2_t){{0.0f, 0.0f}};
+
+    // Initialize upsampling filters
+    const float taskInterval = 1.0f / taskRateHz;
+    ofAp.upsampleLpfGain = pt3FilterGain(UPSAMPLING_CUTOFF_HZ, taskInterval);
+    for (unsigned i = 0; i < ARRAYLEN(ofAp.upsampleLpfBF); i++) {
+        pt3FilterInit(&ofAp.upsampleLpfBF[i], ofAp.upsampleLpfGain);
+    }
+
+    ofAp.maxAngle = autopilotConfig()->maxAngle;
+    ofAp.initialized = true;
+}
+
+// Position control using optical flow
+bool positionControlOpticalFlow(void)
+{
+    if (!ofAp.initialized) {
+        return false;
+    }
+
+    // Check if optical flow position is valid
+    if (!opticalFlowIsPositionValid()) {
+        return false;
+    }
+
+    // Get current position estimate from optical flow (in m, convert to cm)
+    positionEstimate_t posEstimate;
+    if (!opticalFlowGetPosition(&posEstimate)) {
+        return false;
+    }
+
+    // Calculate position error in cm (East, North)
+    vector2_t positionError;
+    positionError.x = ofAp.targetPosition.x - (posEstimate.positionX * 100.0f); // East error (cm)
+    positionError.y = ofAp.targetPosition.y - (posEstimate.positionY * 100.0f); // North error (cm)
+
+    // Calculate velocity in cm/s
+    vector2_t velocity;
+    velocity.x = posEstimate.velocityX * 100.0f; // East velocity (cm/s)
+    velocity.y = posEstimate.velocityY * 100.0f; // North velocity (cm/s)
+
+    // PID controller (simpler than GPS version since we have direct velocity)
+    vector2_t pidSum = {0};
+
+    for (axisEF_e efAxisIdx = LON; efAxisIdx <= LAT; efAxisIdx++) {
+        // P term: position error
+        const float pidP = positionError.v[efAxisIdx] * positionPidCoeffs.Kp;
+
+        // D term: velocity (acts as damping)
+        const float pidD = velocity.v[efAxisIdx] * positionPidCoeffs.Kd;
+
+        pidSum.v[efAxisIdx] = pidP - pidD; // Note: negative D to oppose velocity
+    }
+
+    // Handle stick adjustment
+    vector2_t anglesBF;
+    if (ap.sticksActive) {
+        // Sticks active: allow pilot control, update target to current position
+        anglesBF = (vector2_t){{0, 0}};
+        ofAp.targetPosition.x = posEstimate.positionX * 100.0f;
+        ofAp.targetPosition.y = posEstimate.positionY * 100.0f;
+    } else {
+        // Rotate PID output from Earth Frame to Body Frame
+        // attitude.values.yaw increases clockwise from north
+        const float angle = DECIDEGREES_TO_RADIANS(attitude.values.yaw - 900);
+        vector2_t pidBodyFrame;
+        vector2Rotate(&pidBodyFrame, &pidSum, angle);
+
+        anglesBF.v[AI_ROLL] = -pidBodyFrame.y;  // Negative roll to fly left
+        anglesBF.v[AI_PITCH] = pidBodyFrame.x;  // Positive pitch for forward
+
+        // Limit angle vector to maxAngle
+        const float mag = vector2Norm(&anglesBF);
+        if (mag > ofAp.maxAngle && mag > 0.0f) {
+            vector2Scale(&anglesBF, &anglesBF, ofAp.maxAngle / mag);
+        }
+    }
+
+    ofAp.pidSumBF = anglesBF;
+
+    // Apply upsampling filter and output to autopilotAngle
+    for (unsigned i = 0; i < RP_AXIS_COUNT; i++) {
+        autopilotAngle[i] = pt3FilterApply(&ofAp.upsampleLpfBF[i], ofAp.pidSumBF.v[i]);
+    }
+
+    // Debug output
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 0, lrintf(vector2Norm(&positionError)));     // Distance to target (cm)
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 1, lrintf(positionError.x));                 // X error (cm)
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 2, lrintf(pidSum.x * 10));                   // X PID output
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle
+
+    return true;
+}
+
+// Check if optical flow is available and healthy
+bool isOpticalFlowAvailable(void)
+{
+    return sensors(SENSOR_RANGEFINDER) &&
+           rangefinderIsHealthy() &&
+           opticalFlowIsPositionValid();
+}
+#endif // USE_RANGEFINDER_ESP32CAM_TFMINI
 
 #endif // !USE_WING

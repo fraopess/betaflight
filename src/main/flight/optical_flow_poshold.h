@@ -30,6 +30,12 @@ void opticalFlowInit(void);
 void opticalFlowUpdate(void);
 bool opticalFlowGetPosition(positionEstimate_t *estimate);
 
+// Position control functions
+void opticalFlowResetPosition(void);
+void opticalFlowSetPositionTarget(float targetX, float targetY);
+void opticalFlowActivatePositionHold(bool activate);
+bool opticalFlowIsPositionValid(void);
+
 // Flow fusion with IMU
 void fuseOpticalFlowWithIMU(float flowX, float flowY, float altitude, float dt);
 

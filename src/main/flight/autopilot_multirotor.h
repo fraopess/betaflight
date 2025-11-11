@@ -35,4 +35,10 @@ bool isBelowLandingAltitude(void);
 float getAutopilotThrottle(void);
 bool isAutopilotInControl(void);
 
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+void resetPositionControlOpticalFlow(unsigned taskRateHz);
+bool positionControlOpticalFlow(void);
+bool isOpticalFlowAvailable(void);
+#endif
+
 #endif // !USE_WING

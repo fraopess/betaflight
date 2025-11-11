@@ -99,6 +99,9 @@
 #include "sensors/sensors.h"
 #include "sensors/rangefinder.h"
 #include "sensors/opticalflow.h"
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#include "flight/optical_flow_poshold.h"
+#endif
 
 #include "telemetry/telemetry.h"
 #include "telemetry/crsf.h"
@@ -300,6 +303,11 @@ static void taskUpdateRangefinder(timeUs_t currentTimeUs)
     rangefinderUpdate();
 
     rangefinderProcess(getCosTiltAngle());
+
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    // Update optical flow position estimation (ESP32Cam-TFMini has integrated optical flow)
+    opticalFlowUpdate();
+#endif
 }
 #endif
 

@@ -46,6 +46,9 @@
 #include "sensors/rangefinder.h"
 #include "sensors/sensors.h"
 #include "sensors/opticalflow.h"
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#include "flight/optical_flow_poshold.h"
+#endif
 
 uint8_t detectedSensors[SENSOR_INDEX_COUNT] = { GYRO_NONE, ACC_NONE, BARO_NONE, MAG_NONE, RANGEFINDER_NONE, OPTICALFLOW_NONE};
 uint8_t detectedGyros[GYRO_COUNT];
@@ -88,6 +91,10 @@ bool sensorsAutodetect(void)
 
 #ifdef USE_RANGEFINDER
     rangefinderInit();
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    // Initialize optical flow position estimation for ESP32Cam-TFMini
+    opticalFlowInit();
+#endif
 #endif
 
 #ifdef USE_OPTICALFLOW
