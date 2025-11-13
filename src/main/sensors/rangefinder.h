@@ -66,3 +66,4 @@ int32_t rangefinderGetLatestRawAltitude(void);
 void rangefinderUpdate(void);
 bool rangefinderProcess(float cosTiltAngle);
 bool rangefinderIsHealthy(void);
+bool rangefinderIsSurfaceAltitudeValid(void);

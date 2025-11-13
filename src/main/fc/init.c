@@ -1004,10 +1004,10 @@ void init(void)
 
 #if defined(USE_RANGEFINDER)
     if (sensors(SENSOR_RANGEFINDER)) {
-        // Configuration spéciale pour ESP32Cam-TFMini à 50Hz
+        // Configuration spéciale pour ESP32Cam-TFMini à 100Hz (matching altitude PID rate)
 #ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
         if (rangefinderConfig()->rangefinder_hardware == RANGEFINDER_ESP32CAM_TFMINI) {
-            rescheduleTask(TASK_RANGEFINDER, TASK_PERIOD_HZ(50));
+            rescheduleTask(TASK_RANGEFINDER, TASK_PERIOD_HZ(100));
         }
 #endif
     }

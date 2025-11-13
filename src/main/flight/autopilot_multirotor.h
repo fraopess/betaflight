@@ -34,6 +34,9 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
 bool isBelowLandingAltitude(void);
 float getAutopilotThrottle(void);
 bool isAutopilotInControl(void);
+float getAltitudePidP(void);
+float getAltitudePidI(void);
+float getAltitudePidD(void);
 
 #ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
 void resetPositionControlOpticalFlow(unsigned taskRateHz);

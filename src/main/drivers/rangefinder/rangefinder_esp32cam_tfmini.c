@@ -105,6 +105,11 @@ static uint8_t calculateChecksum(const uint8_t *data, size_t len)
 
 // Apply configuration transformations to flow data
 // altitude_cm: altitude in centimeters (for validity checks)
+//
+// NOTE: This function applies sensor-level transformations (scale, invert, rotate).
+// The raw sensor data is assumed to follow MAVLink OPTICAL_FLOW_RAD convention.
+// High-level axis mapping (flowX→sideways, flowY→forward) happens in optical_flow_poshold.c
+//
 static void applyFlowTransformations(float *flowX, float *flowY, float altitude_cm)
 {
     const esp32camTfminiConfig_t *config = esp32camTfminiConfig();
@@ -202,10 +207,13 @@ static void processPacket(esp32camTfminiPacket_t *packet)
     
     // Convert linear velocity to angular rate using distance
     // flowRate (rad/s) = velocity (m/s) / distance (m)
+    float rawFlowX = 0.0f;
+    float rawFlowY = 0.0f;
+
     if (sensorState.distanceValid && packet->distance > 10) {  // packet->distance is in cm
         float distance_m = packet->distance / 100.0f;  // Convert from cm to m
-        float rawFlowX = velX_m_s / distance_m;
-        float rawFlowY = velY_m_s / distance_m;
+        rawFlowX = velX_m_s / distance_m;
+        rawFlowY = velY_m_s / distance_m;
 
         // Apply all transformations (rotation, inversion, scaling, altitude limits)
         sensorState.flowRateX = rawFlowX;
@@ -220,11 +228,17 @@ static void processPacket(esp32camTfminiPacket_t *packet)
         sensorState.flowRateY = 0.0f;
         sensorState.flowValid = false;
     }
-    
-    // Update DEBUG values - show TRANSFORMED values (what actually gets used)
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, sensorState.distance);  // Distance in cm (scaled)
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, (int32_t)(sensorState.flowRateX * 1000));  // Transformed flowX (mrad/s)
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, (int32_t)(sensorState.flowRateY * 1000));  // Transformed flowY (mrad/s)
+
+    // Update DEBUG values - show RAW and TRANSFORMED values at sensor level
+    // NOTE: For full processing chain including gyro compensation and body velocities, use DEBUG_OPTICAL_FLOW
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 0, sensorState.distance);                     // Altitude in cm
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 1, (int32_t)(rawFlowX * 1000));               // RAW flowX before transforms (mrad/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 2, (int32_t)(rawFlowY * 1000));               // RAW flowY before transforms (mrad/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 3, (int32_t)(sensorState.flowRateX * 1000));  // Transformed flowX after rotation/invert/scale (mrad/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 4, (int32_t)(sensorState.flowRateY * 1000));  // Transformed flowY after rotation/invert/scale (mrad/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 5, (int32_t)(packet->velocity_x / 1000));     // Sensor velocity_x from hardware (mm/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 6, (int32_t)(packet->velocity_y / 1000));     // Sensor velocity_y from hardware (mm/s)
+    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 7, packet->distance);                         // Raw distance from sensor (cm)
 
 }
 

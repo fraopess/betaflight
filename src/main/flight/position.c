@@ -36,6 +36,7 @@
 #include "flight/position.h"
 #include "flight/imu.h"
 #include "flight/pid.h"
+#include "flight/autopilot.h"
 
 #include "io/gps.h"
 
@@ -260,15 +261,22 @@ float getAltitudeCmForAltHold(void)
 #ifdef USE_RANGEFINDER
     if (sensors(SENSOR_RANGEFINDER)) {
         const int32_t rangefinderAlt = rangefinderGetLatestAltitude();
-        // Check if rangefinder data is valid (not out of range or hardware failure)
-        if (rangefinderAlt > 0 && rangefinderIsHealthy()) {
+        // Check if rangefinder data is valid:
+        // - altitude must be positive (not OUT_OF_RANGE or HARDWARE_FAILURE)
+        // - hardware must be responding (no timeout)
+        // - surface must be valid (good SNR, within dynamic threshold)
+        if (rangefinderAlt > 0 && rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
             altitudeSourceUsed = 1; // Using rangefinder
+            // Debug: altitude used for control (in cm)
+            DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, rangefinderAlt);
             return (float)rangefinderAlt;
         }
     }
 #endif
     // Fall back to GPS+baro altitude
     altitudeSourceUsed = 0; // Using GPS+baro
+    // Debug: altitude used for control (in cm)
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, lrintf(zeroedAltitudeCm));
     return zeroedAltitudeCm;
 }
 

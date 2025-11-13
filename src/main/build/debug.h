@@ -131,6 +131,7 @@ typedef enum {
     DEBUG_FLASH_TEST_PRBS,
     DEBUG_MAVLINK_TELEMETRY,
     DEBUG_OPTICAL_FLOW,
+    DEBUG_POSHOLD_STICKS,
     DEBUG_COUNT    
 } debugType_e;
 

@@ -1,10 +1,18 @@
 /*
  * Integration of ESP32Cam-TFMini optical flow data into position estimation
- * 
+ *
  * This file shows how to integrate the optical flow data from ESP32Cam-TFMini
  * into the position hold (POSHOLD) and altitude hold (ALTHOLD) flight modes.
- * 
+ *
  * The optical flow data will be fused with gyroscope and altitude data.
+ *
+ * OPTICAL FLOW AXIS CONVENTION (MAVLink OPTICAL_FLOW_RAD standard):
+ *   - flowX: rotation around X (roll) + translation along Y (sideways)
+ *   - flowY: rotation around Y (pitch) + translation along X (forward)
+ *
+ * After gyroscopic compensation, flow values map to body velocities:
+ *   - velBodyX (forward/back) ← flowY
+ *   - velBodyY (left/right) ← -flowX (inverted per MAVLink spec)
  */
 
 #pragma once

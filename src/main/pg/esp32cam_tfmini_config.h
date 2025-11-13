@@ -46,14 +46,23 @@ typedef enum {
 } esp32camTfminiAlignment_e;
 
 // All distance/altitude values are in CENTIMETERS (consistent with baro/GPS)
+//
+// AXIS CONVENTION: ESP32Cam follows MAVLink OPTICAL_FLOW_RAD standard where:
+//   - flowX: rotation around X (roll) + translation along Y (sideways)
+//   - flowY: rotation around Y (pitch) + translation along X (forward)
+//
+// After gyro compensation, flow maps to body-frame motion:
+//   - flowX → left/right motion (with sign inversion)
+//   - flowY → forward/back motion
+//
 typedef struct esp32camTfminiConfig_s {
     uint8_t alignment;                      // Sensor orientation
     uint8_t opticalFlowScale;               // Scale factor for optical flow (0-200%, default 100)
     uint8_t rangefinderScale;               // Scale factor for rangefinder (0-200%, default 100)
     uint8_t minAltitudeCm;                  // Minimum altitude for valid optical flow (CENTIMETERS)
     uint8_t maxAltitudeCm;                  // Maximum altitude for valid optical flow (CENTIMETERS, 0 = use sensor max)
-    bool flowInvertX;                       // Invert X axis flow
-    bool flowInvertY;                       // Invert Y axis flow
+    bool flowInvertX;                       // Invert X axis flow (affects left/right motion after compensation)
+    bool flowInvertY;                       // Invert Y axis flow (affects forward/back motion after compensation)
 } esp32camTfminiConfig_t;
 
 PG_DECLARE(esp32camTfminiConfig_t, esp32camTfminiConfig);

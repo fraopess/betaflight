@@ -73,6 +73,11 @@ static void posHoldCheckSticks(void)
     if (!failsafeIsActive() && posHold.useStickAdjustment) {
         const bool sticksDeflected = (getRcDeflectionAbs(FD_ROLL) > posHold.deadband) || (getRcDeflectionAbs(FD_PITCH) > posHold.deadband);
         setSticksActiveStatus(sticksDeflected);
+
+        // Debug stick deflection values
+        DEBUG_SET(DEBUG_POSHOLD_STICKS, 5, lrintf(getRcDeflectionAbs(FD_ROLL) * 1000));   // Roll deflection (0-1000)
+        DEBUG_SET(DEBUG_POSHOLD_STICKS, 6, lrintf(getRcDeflectionAbs(FD_PITCH) * 1000));  // Pitch deflection (0-1000)
+        DEBUG_SET(DEBUG_POSHOLD_STICKS, 7, lrintf(posHold.deadband * 1000));              // Deadband threshold (0-1000)
     }
 }
 
@@ -134,12 +139,14 @@ void updatePosHold(timeUs_t currentTimeUs) {
     }
 
     if (posHold.isEnabled && posHold.isControlOk) {
+        // CRITICAL: Always check sticks first, even if sensors fail
+        // This ensures pilot can ALWAYS regain manual control
+        posHoldCheckSticks();
+
         // Re-check sensors each cycle (allows switching between GPS and optical flow)
         posHold.areSensorsOk = sensorsOk();
 
         if (posHold.areSensorsOk) {
-            posHoldCheckSticks();
-
             // Use the appropriate position controller based on source
             if (posHold.source == POS_HOLD_SOURCE_GPS) {
                 posHold.isControlOk = positionControl();

@@ -61,6 +61,8 @@ static pidCoefficient_t positionPidCoeffs;
 
 static float altitudeI = 0.0f;
 static float throttleOut = 0.0f;
+static float altitudePidP = 0.0f;
+static float altitudePidD = 0.0f;
 
 typedef struct efPidAxis_s {
     bool isStopping;
@@ -174,7 +176,7 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
 {
     const float verticalVelocityCmS = getAltitudeDerivative();
     const float altitudeErrorCm = targetAltitudeCm - getAltitudeCm();
-    const float altitudeP = altitudeErrorCm * altitudePidCoeffs.Kp;
+    altitudePidP = altitudeErrorCm * altitudePidCoeffs.Kp;
 
     // reduce the iTerm gain for errors greater than 200cm (2m), otherwise it winds up too much
     const float itermRelax = (fabsf(altitudeErrorCm) < 200.0f) ? 1.0f : 0.1f;
@@ -194,12 +196,12 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
         }
     }
 
-    const float altitudeD = verticalVelocityCmS * dBoost * altitudePidCoeffs.Kd;
+    altitudePidD = verticalVelocityCmS * dBoost * altitudePidCoeffs.Kd;
 
     const float altitudeF = targetAltitudeStep * altitudePidCoeffs.Kf;
 
     const float hoverOffset = autopilotConfig()->hoverThrottle - PWM_RANGE_MIN;
-    float throttleOffset = altitudeP + altitudeI - altitudeD + altitudeF + hoverOffset;
+    float throttleOffset = altitudePidP + altitudeI - altitudePidD + altitudeF + hoverOffset;
 
     const float tiltMultiplier = 1.0f / fmaxf(getCosTiltAngle(), 0.5f);
     // 1 = flat, 1.3 at 40 degrees, 1.56 at 50 deg, max 2.0 at 60 degrees or higher
@@ -217,10 +219,15 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
 
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 1, lrintf(tiltMultiplier * 100));
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 3, lrintf(targetAltitudeCm));
-    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 4, lrintf(altitudeP));
+    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 4, lrintf(altitudePidP));
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 5, lrintf(altitudeI));
-    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 6, lrintf(-altitudeD));
+    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 6, lrintf(-altitudePidD));
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 7, lrintf(altitudeF));
+
+    // Also set PID values in RANGEFINDER_QUALITY debug mode
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 5, lrintf(altitudePidP));
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 6, lrintf(altitudeI));
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 7, lrintf(-altitudePidD));
 }
 
 void setSticksActiveStatus(bool areSticksActive)
@@ -404,6 +411,21 @@ bool isAutopilotInControl(void)
     return !ap.sticksActive;
 }
 
+float getAltitudePidP(void)
+{
+    return altitudePidP;
+}
+
+float getAltitudePidI(void)
+{
+    return altitudeI;
+}
+
+float getAltitudePidD(void)
+{
+    return altitudePidD;
+}
+
 #ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
 /*
  * Position control using optical flow instead of GPS
@@ -412,6 +434,7 @@ bool isAutopilotInControl(void)
 
 typedef struct opticalFlowAutopilotState_s {
     vector2_t targetPosition;       // Target position in cm (X=East, Y=North)
+    vector2_t integral;             // Integral term for each axis
     float maxAngle;
     vector2_t pidSumBF;             // PID output in body frame
     pt3Filter_t upsampleLpfBF[RP_AXIS_COUNT];
@@ -423,6 +446,7 @@ static opticalFlowAutopilotState_t ofAp = {
     .maxAngle = 30.0f,
     .upsampleLpfGain = 1.0f,
     .initialized = false,
+    .integral = {{0.0f, 0.0f}},
 };
 
 // Reset optical flow position control (called when entering POS_HOLD with optical flow)
@@ -433,6 +457,9 @@ void resetPositionControlOpticalFlow(unsigned taskRateHz)
 
     // Set target to current position (0, 0 since we just reset)
     ofAp.targetPosition = (vector2_t){{0.0f, 0.0f}};
+
+    // Reset integral terms
+    ofAp.integral = (vector2_t){{0.0f, 0.0f}};
 
     // Initialize upsampling filters
     const float taskInterval = 1.0f / taskRateHz;
@@ -473,17 +500,32 @@ bool positionControlOpticalFlow(void)
     velocity.x = posEstimate.velocityX * 100.0f; // East velocity (cm/s)
     velocity.y = posEstimate.velocityY * 100.0f; // North velocity (cm/s)
 
-    // PID controller (simpler than GPS version since we have direct velocity)
+    // PID controller with integral term for better hold performance
     vector2_t pidSum = {0};
+
+    // Update rate: assume 10Hz optical flow updates (100ms)
+    const float dataInterval = 0.1f;
+    const float iTermLeakGain = 1.0f - pt1FilterGainFromDelay(2.5f, dataInterval); // 2.5s time constant
 
     for (axisEF_e efAxisIdx = LON; efAxisIdx <= LAT; efAxisIdx++) {
         // P term: position error
         const float pidP = positionError.v[efAxisIdx] * positionPidCoeffs.Kp;
 
+        // I term: accumulate position error (only when not moving sticks)
+        if (!ap.sticksActive) {
+            ofAp.integral.v[efAxisIdx] += positionError.v[efAxisIdx] * dataInterval;
+            // Limit integral to prevent windup
+            ofAp.integral.v[efAxisIdx] = constrainf(ofAp.integral.v[efAxisIdx], -10000.0f, 10000.0f);
+        } else {
+            // Slowly leak integral when sticks are active
+            ofAp.integral.v[efAxisIdx] *= iTermLeakGain;
+        }
+        const float pidI = ofAp.integral.v[efAxisIdx] * positionPidCoeffs.Ki;
+
         // D term: velocity (acts as damping)
         const float pidD = velocity.v[efAxisIdx] * positionPidCoeffs.Kd;
 
-        pidSum.v[efAxisIdx] = pidP - pidD; // Note: negative D to oppose velocity
+        pidSum.v[efAxisIdx] = pidP + pidI - pidD; // Note: negative D to oppose velocity
     }
 
     // Handle stick adjustment
@@ -493,6 +535,7 @@ bool positionControlOpticalFlow(void)
         anglesBF = (vector2_t){{0, 0}};
         ofAp.targetPosition.x = posEstimate.positionX * 100.0f;
         ofAp.targetPosition.y = posEstimate.positionY * 100.0f;
+        // Note: integral leak is handled in the loop above
     } else {
         // Rotate PID output from Earth Frame to Body Frame
         // attitude.values.yaw increases clockwise from north
@@ -522,6 +565,14 @@ bool positionControlOpticalFlow(void)
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 1, lrintf(positionError.x));                 // X error (cm)
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 2, lrintf(pidSum.x * 10));                   // X PID output
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle
+
+    // Debug mode for pos_hold sticks and control
+    DEBUG_SET(DEBUG_POSHOLD_STICKS, 0, ap.sticksActive);                            // Sticks active flag
+    DEBUG_SET(DEBUG_POSHOLD_STICKS, 1, lrintf(positionError.x));                    // Position error X (cm)
+    DEBUG_SET(DEBUG_POSHOLD_STICKS, 2, lrintf(positionError.y));                    // Position error Y (cm)
+    DEBUG_SET(DEBUG_POSHOLD_STICKS, 3, lrintf(anglesBF.x * 10));                    // Roll angle before limit (deg × 10)
+    DEBUG_SET(DEBUG_POSHOLD_STICKS, 4, lrintf(anglesBF.y * 10));                    // Pitch angle before limit (deg × 10)
+    // Note: DEBUG[5], DEBUG[6], DEBUG[7] are set in pos_hold_multirotor.c (stick deflections)
 
     return true;
 }

@@ -93,6 +93,10 @@ void opticalFlowUpdate(void)
     float flowRateX = esp32camTfminiGetFlowRateX();
     float flowRateY = esp32camTfminiGetFlowRateY();
 
+    // Get optical flow data validity
+    bool flowValid = esp32camTfminiIsFlowValid();
+    bool altitudeValid = (altitudeCm >= MIN_VALID_ALTITUDE_CM && altitudeCm <= MAX_VALID_ALTITUDE_CM);
+
     // *** GYROSCOPIC COMPENSATION ***
     // Subtract gyro rotation rates to get pure translational flow
     // gyro.gyroADCf is in deg/s, convert to rad/s
@@ -105,10 +109,39 @@ void opticalFlowUpdate(void)
     float compensatedFlowX = flowRateX - gyroRateX;
     float compensatedFlowY = flowRateY - gyroRateY;
 
-    // Convert compensated flow rates to ground velocities (m/s)
+    // *** AXIS MAPPING PER MAVLINK CONVENTION ***
+    // Convert compensated flow rates to body-frame velocities (m/s)
     // velocity = flowRate (rad/s) * altitude (m)
-    float velCameraX = compensatedFlowX * altitude;
-    float velCameraY = compensatedFlowY * altitude;
+    //
+    // MAVLink convention (OPTICAL_FLOW_RAD message):
+    //   - flowX combines: rotation around X-axis (roll) + translation along Y-axis (sideways)
+    //   - flowY combines: rotation around Y-axis (pitch) + translation along X-axis (forward)
+    //
+    // After gyro compensation, we have pure translation components:
+    //   - compensatedFlowX → sideways motion (Y-axis translation)
+    //   - compensatedFlowY → forward/back motion (X-axis translation)
+    //
+    // Body frame mapping (with sign corrections):
+    //   - velBodyX (forward/back) = compensatedFlowY * altitude
+    //   - velBodyY (left/right) = -compensatedFlowX * altitude
+    //     (negative because positive Y translation produces NEGATIVE flowX per MAVLink spec)
+    float velBodyX_raw = compensatedFlowY * altitude;   // Forward/back velocity from flowY (before tilt comp)
+    float velBodyY_raw = -compensatedFlowX * altitude;  // Left/right velocity from flowX (inverted, before tilt comp)
+
+    // Compensated flowX after gyro subtraction (mrad/s)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 4, (int)(compensatedFlowY * 1000));            // Compensated flowY after gyro subtraction (mrad/s)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 5, (int)(velBodyX_raw * 100));                 // Body velocity X=forward/back (cm/s, before tilt comp)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 6, (int)(velBodyY_raw * 100));                 // Body velocity Y=left/right (cm/s, before tilt comp)
+    DEBUG_SET(DEBUG_OPTICAL_FLOW, 7, (int)((gyroRateX * 1000 + gyroRateY * 1000) / 2)); // Avg gyro rate for reference (mrad/s)
+
+    // Check validity and return early if conditions not met (after debug update for calibration)
+    if (!flowValid || !altitudeValid) {
+        posEstimate.valid = false;
+        return;
+    }
+
+    float velBodyX = velBodyX_raw;
+    float velBodyY = velBodyY_raw;
 
     // *** BODY TO EARTH FRAME TRANSFORMATION ***
     // Get current attitude (in decidegrees, convert to radians)
@@ -116,7 +149,8 @@ void opticalFlowUpdate(void)
     float pitch = attitude.values.pitch * 0.1f * DEG_TO_RAD;
     float yaw = attitude.values.yaw * 0.1f * DEG_TO_RAD;
 
-    // Apply tilt compensation first (project camera velocity to ground plane)
+    // *** TILT COMPENSATION ***
+    // Apply tilt compensation (project body velocity to ground plane)
     float cosPitch = cos_approx(pitch);
     float cosRoll = cos_approx(roll);
     float cosTilt = cosPitch * cosRoll; // Combined tilt factor
@@ -128,8 +162,8 @@ void opticalFlowUpdate(void)
     }
 
     // Compensate for tilt to get ground velocity
-    float velBodyX = velCameraX / cosTilt;
-    float velBodyY = velCameraY / cosTilt;
+    velBodyX = velBodyX / cosTilt;
+    velBodyY = velBodyY / cosTilt;
 
     // Rotate from body frame to earth frame using yaw angle
     float cosYaw = cos_approx(yaw);
