@@ -143,8 +143,6 @@ void updatePosHold(timeUs_t currentTimeUs) {
         // This ensures pilot can ALWAYS regain manual control
         posHoldCheckSticks();
 
-        // Re-check sensors each cycle (allows switching between GPS and optical flow)
-        posHold.areSensorsOk = sensorsOk();
 
         if (posHold.areSensorsOk) {
             // Use the appropriate position controller based on source

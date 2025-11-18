@@ -230,6 +230,16 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
     DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 3, lrintf(altitudePidP));
     DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, lrintf(altitudeI));
     DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 5, lrintf(-altitudePidD));
+
+    // DEBUG_ALT_HOLD mode for altitude hold diagnostics
+    DEBUG_SET(DEBUG_ALT_HOLD, 0, lrintf(rangefinderGetLatestAltitude()));  // Rangefinder altitude (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD, 1, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // Validity (100=valid, 0=invalid)
+    DEBUG_SET(DEBUG_ALT_HOLD, 2, lrintf(targetAltitudeCm));  // Altitude setpoint (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD, 3, lrintf(altitudeErrorCm));  // Altitude error (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD, 4, lrintf(altitudePidP));  // P component
+    DEBUG_SET(DEBUG_ALT_HOLD, 5, lrintf(altitudeI));  // I component
+    DEBUG_SET(DEBUG_ALT_HOLD, 6, lrintf(-altitudePidD));  // D component (negated for display)
+    DEBUG_SET(DEBUG_ALT_HOLD, 7, lrintf(altitudeF));  // F component
 }
 
 void setSticksActiveStatus(bool areSticksActive)
@@ -530,29 +540,35 @@ bool positionControlOpticalFlow(void)
         pidSum.v[efAxisIdx] = pidP + pidI - pidD; // Note: negative D to oppose velocity
     }
 
-    // Handle stick adjustment
+    // Rotate PID output from Earth Frame to Body Frame
+    // attitude.values.yaw increases clockwise from north
+    const float angle = DECIDEGREES_TO_RADIANS(attitude.values.yaw - 900);
+    vector2_t pidBodyFrame;
+    vector2Rotate(&pidBodyFrame, &pidSum, angle);
+
     vector2_t anglesBF;
+    anglesBF.v[AI_ROLL] = -pidBodyFrame.y;  // Negative roll to fly left
+    anglesBF.v[AI_PITCH] = pidBodyFrame.x;  // Positive pitch for forward
+
     if (ap.sticksActive) {
-        // Sticks active: allow pilot control, update target to current position
-        anglesBF = (vector2_t){{0, 0}};
+        // Sticks are active: add stick input as angle offset to position hold control
+        // Scale stick deflection to angle (full stick deflection = maxAngle degrees)
+        const float stickRoll = getRcDeflection(FD_ROLL) * ofAp.maxAngle;
+        const float stickPitch = getRcDeflection(FD_PITCH) * ofAp.maxAngle;
+
+        anglesBF.v[AI_ROLL] += stickRoll;
+        anglesBF.v[AI_PITCH] += stickPitch;
+
+        // Update target to current position
         ofAp.targetPosition.x = posEstimate.positionX * 100.0f;
         ofAp.targetPosition.y = posEstimate.positionY * 100.0f;
         // Note: integral leak is handled in the loop above
-    } else {
-        // Rotate PID output from Earth Frame to Body Frame
-        // attitude.values.yaw increases clockwise from north
-        const float angle = DECIDEGREES_TO_RADIANS(attitude.values.yaw - 900);
-        vector2_t pidBodyFrame;
-        vector2Rotate(&pidBodyFrame, &pidSum, angle);
+    }
 
-        anglesBF.v[AI_ROLL] = -pidBodyFrame.y;  // Negative roll to fly left
-        anglesBF.v[AI_PITCH] = pidBodyFrame.x;  // Positive pitch for forward
-
-        // Limit angle vector to maxAngle
-        const float mag = vector2Norm(&anglesBF);
-        if (mag > ofAp.maxAngle && mag > 0.0f) {
-            vector2Scale(&anglesBF, &anglesBF, ofAp.maxAngle / mag);
-        }
+    // Limit angle vector to maxAngle
+    const float mag = vector2Norm(&anglesBF);
+    if (mag > ofAp.maxAngle && mag > 0.0f) {
+        vector2Scale(&anglesBF, &anglesBF, ofAp.maxAngle / mag);
     }
 
     ofAp.pidSumBF = anglesBF;

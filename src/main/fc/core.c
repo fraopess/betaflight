@@ -63,6 +63,7 @@
 #include "flight/gps_rescue.h"
 #include "flight/alt_hold.h"
 #include "flight/pos_hold.h"
+#include "flight/autopilot.h"
 
 #if defined(USE_DYN_NOTCH_FILTER)
 #include "flight/dyn_notch_filter.h"
@@ -1048,6 +1049,8 @@ void processRxModes(timeUs_t currentTimeUs)
         && !FLIGHT_MODE(GPS_RESCUE_MODE)
         // and either the alt_hold switch is activated, or are in failsafe landing mode
         && (IS_RC_MODE_ACTIVE(BOXPOSHOLD) || failsafeIsActive())
+        // and autopilot is in control (pilot not trying to regain manual control via sticks)
+        && isAutopilotInControl()
         // and we have Acc for self-levelling
         && sensors(SENSOR_ACC)
         // but not until throttle is raised

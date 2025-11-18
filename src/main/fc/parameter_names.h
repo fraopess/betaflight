@@ -267,6 +267,15 @@
 #define PARAM_NAME_POS_HOLD_DEADBAND "pos_hold_deadband"
 #endif
 
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#define PARAM_NAME_OF_POSHOLD_MAX_ANGLE "of_poshold_max_angle"
+#define PARAM_NAME_OF_POSHOLD_PID_P "of_poshold_pid_p"
+#define PARAM_NAME_OF_POSHOLD_PID_I "of_poshold_pid_i"
+#define PARAM_NAME_OF_POSHOLD_PID_D "of_poshold_pid_d"
+#define PARAM_NAME_OF_POSHOLD_PID_I_MAX "of_poshold_pid_i_max"
+#define PARAM_NAME_OF_POSHOLD_STICK_DEADBAND "of_poshold_stick_deadband"
+#endif
+
 #define PARAM_NAME_IMU_DCM_KP "imu_dcm_kp"
 #define PARAM_NAME_IMU_DCM_KI "imu_dcm_ki"
 #define PARAM_NAME_IMU_SMALL_ANGLE "small_angle"

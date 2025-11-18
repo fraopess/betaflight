@@ -114,6 +114,7 @@
 #include "pg/stats.h"
 #include "pg/board.h"
 #include "pg/esp32cam_tfmini_config.h"
+#include "pg/optical_flow_poshold.h"
 
 #include "rx/a7105_flysky.h"
 #include "rx/cc2500_frsky_common.h"
@@ -1843,6 +1844,16 @@ const clivalue_t valueTable[] = {
     { "esp32cam_tfmini_max_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, maxAltitudeCm) },
     { "esp32cam_tfmini_flow_invert_x",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertX) },
     { "esp32cam_tfmini_flow_invert_y",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertY) },
+#endif
+
+// PG_OF_POSHOLD_CONFIG
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+    { PARAM_NAME_OF_POSHOLD_MAX_ANGLE,        VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 30},  PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, max_angle) },
+    { PARAM_NAME_OF_POSHOLD_PID_P,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_p) },
+    { PARAM_NAME_OF_POSHOLD_PID_I,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_i) },
+    { PARAM_NAME_OF_POSHOLD_PID_D,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_d) },
+    { PARAM_NAME_OF_POSHOLD_PID_I_MAX,        VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_i_max) },
+    { PARAM_NAME_OF_POSHOLD_STICK_DEADBAND,   VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, stick_deadband) },
 #endif
 
 // PG_PINIO_CONFIG

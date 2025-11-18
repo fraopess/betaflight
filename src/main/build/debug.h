@@ -132,7 +132,9 @@ typedef enum {
     DEBUG_MAVLINK_TELEMETRY,
     DEBUG_OPTICAL_FLOW,
     DEBUG_POSHOLD_STICKS,
-    DEBUG_COUNT    
+    DEBUG_OF_HOLD,
+    DEBUG_ALT_HOLD,
+    DEBUG_COUNT
 } debugType_e;
 
 extern const char * const debugModeNames[DEBUG_COUNT];
