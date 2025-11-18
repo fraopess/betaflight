@@ -174,8 +174,9 @@ void resetAltitudeControl (void) {
 
 void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAltitudeStep)
 {
-    const float verticalVelocityCmS = getAltitudeDerivative();
-    const float altitudeErrorCm = targetAltitudeCm - getAltitudeCm();
+    // Use lidar-aware functions for altitude hold to prioritize rangefinder when available
+    const float verticalVelocityCmS = getAltitudeDerivativeForAltHold();
+    const float altitudeErrorCm = targetAltitudeCm - getAltitudeCmForAltHold();
     altitudePidP = altitudeErrorCm * altitudePidCoeffs.Kp;
 
     // reduce the iTerm gain for errors greater than 200cm (2m), otherwise it winds up too much
@@ -224,10 +225,11 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 6, lrintf(-altitudePidD));
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 7, lrintf(altitudeF));
 
-    // Also set PID values in RANGEFINDER_QUALITY debug mode
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 5, lrintf(altitudePidP));
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 6, lrintf(altitudeI));
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 7, lrintf(-altitudePidD));
+    // Also set altitude setpoint and PID values in RANGEFINDER_QUALITY debug mode
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 2, lrintf(targetAltitudeCm));
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 3, lrintf(altitudePidP));
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, lrintf(altitudeI));
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 5, lrintf(-altitudePidD));
 }
 
 void setSticksActiveStatus(bool areSticksActive)

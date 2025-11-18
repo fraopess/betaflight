@@ -42,5 +42,7 @@ float getAltitudeAsl(void);
 int16_t getEstimatedVario(void);
 bool isAltitudeAvailable(void);
 float getAltitudeCmForAltHold(void);
-uint8_t getAltitudeSourceUsed(void);
+float getAltitudeDerivativeForAltHold(void);
+float getBaroGpsAltitudeCm(void);
+bool isLidarValidForAltHold(void);
 

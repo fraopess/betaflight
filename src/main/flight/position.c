@@ -53,7 +53,6 @@
 
 static float displayAltitudeCm = 0.0f;
 static bool altitudeAvailable = false;
-static uint8_t altitudeSourceUsed = 0; // 0 = GPS+baro, 1 = rangefinder
 
 static float zeroedAltitudeCm = 0.0f;
 static float zeroedAltitudeDerivative = 0.0f;
@@ -255,34 +254,113 @@ int16_t getEstimatedVario(void)
 }
 #endif
 
+// Get baro/GPS altitude (without lidar) - used for fallback setpoint
+float getBaroGpsAltitudeCm(void)
+{
+    return zeroedAltitudeCm;
+}
+
+// Check if lidar is currently valid and being used for altitude hold
+bool isLidarValidForAltHold(void)
+{
+#ifdef USE_RANGEFINDER
+    if (sensors(SENSOR_RANGEFINDER)) {
+        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
+        if (rangefinderAlt > 0) {
+            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
+                return true;
+            }
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+            // For ESP32CAM: lidar is valid as soon as we have raw data > 0
+            return true;
+#endif
+        }
+    }
+#endif
+    return false;
+}
+
 // Get altitude for ALTITUDE_HOLD mode, prioritizing rangefinder if available
 float getAltitudeCmForAltHold(void)
 {
 #ifdef USE_RANGEFINDER
     if (sensors(SENSOR_RANGEFINDER)) {
-        const int32_t rangefinderAlt = rangefinderGetLatestAltitude();
-        // Check if rangefinder data is valid:
-        // - altitude must be positive (not OUT_OF_RANGE or HARDWARE_FAILURE)
-        // - hardware must be responding (no timeout)
-        // - surface must be valid (good SNR, within dynamic threshold)
-        if (rangefinderAlt > 0 && rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
-            altitudeSourceUsed = 1; // Using rangefinder
-            // Debug: altitude used for control (in cm)
-            DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, rangefinderAlt);
+        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
+        // For ESP32CAM: prioritize rangefinder as soon as we have valid raw data
+        // For other sensors: apply full validation (healthy + surface valid)
+        if (rangefinderAlt > 0) {
+            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
+                // Fully validated - use calculated altitude with tilt correction
+                return (float)rangefinderGetLatestAltitude();
+            }
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+            // For ESP32CAM: use raw altitude even if not fully validated yet
+            // This ensures we use lidar immediately when entering ALT_HOLD
             return (float)rangefinderAlt;
+#endif
         }
     }
 #endif
     // Fall back to GPS+baro altitude
-    altitudeSourceUsed = 0; // Using GPS+baro
-    // Debug: altitude used for control (in cm)
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, lrintf(zeroedAltitudeCm));
     return zeroedAltitudeCm;
 }
 
-// Get the altitude source currently used (for debug purposes)
-// Returns: 1 if rangefinder is used, 0 if GPS+baro is used
-uint8_t getAltitudeSourceUsed(void)
+// Get altitude derivative for ALTITUDE_HOLD mode, prioritizing rangefinder if available
+float getAltitudeDerivativeForAltHold(void)
 {
-    return altitudeSourceUsed;
+#ifdef USE_RANGEFINDER
+    static float previousLidarAltitudeCm = 0.0f;
+    static float lidarAltitudeDerivative = 0.0f;
+    static pt2Filter_t lidarDerivativeLpf;
+    static bool lidarFilterInitialized = false;
+
+    if (sensors(SENSOR_RANGEFINDER)) {
+        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
+        // Check if lidar is valid (same logic as getAltitudeCmForAltHold)
+        if (rangefinderAlt > 0) {
+            bool useLidar = false;
+            float currentLidarAltitudeCm = 0.0f;
+
+            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
+                // Fully validated - use calculated altitude with tilt correction
+                currentLidarAltitudeCm = (float)rangefinderGetLatestAltitude();
+                useLidar = true;
+            }
+#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+            else {
+                // For ESP32CAM: use raw altitude even if not fully validated yet
+                currentLidarAltitudeCm = (float)rangefinderAlt;
+                useLidar = true;
+            }
+#endif
+
+            if (useLidar) {
+                // Initialize filter if not already done (use same cutoff as baro/GPS derivative)
+                if (!lidarFilterInitialized) {
+                    const float sampleTimeS = HZ_TO_INTERVAL(TASK_ALTITUDE_RATE_HZ);
+                    const float altitudeDerivativeCutoffHz = positionConfig()->altitude_d_lpf / 100.0f;
+                    const float altitudeDerivativeGain = pt2FilterGain(altitudeDerivativeCutoffHz, sampleTimeS);
+                    pt2FilterInit(&lidarDerivativeLpf, altitudeDerivativeGain);
+                    previousLidarAltitudeCm = currentLidarAltitudeCm;
+                    lidarFilterInitialized = true;
+                }
+
+                // Calculate derivative in cm/s
+                lidarAltitudeDerivative = (currentLidarAltitudeCm - previousLidarAltitudeCm) * TASK_ALTITUDE_RATE_HZ;
+                previousLidarAltitudeCm = currentLidarAltitudeCm;
+
+                // Apply same filtering as baro/GPS derivative
+                lidarAltitudeDerivative = pt2FilterApply(&lidarDerivativeLpf, lidarAltitudeDerivative);
+
+                return lidarAltitudeDerivative;
+            }
+        }
+    }
+
+    // If we get here, lidar is not available - reset filter for next time
+    lidarFilterInitialized = false;
+#endif
+
+    // Fall back to GPS+baro altitude derivative
+    return zeroedAltitudeDerivative;
 }

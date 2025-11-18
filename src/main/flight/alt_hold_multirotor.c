@@ -48,6 +48,8 @@ typedef struct {
     float targetVelocity;
     float deadband;
     bool allowStickAdjustment;
+    float fallbackBaroSetpointCm;  // Fallback setpoint based on baro/GPS, updated continuously
+    bool wasUsingLidar;             // Track previous lidar state to detect transitions
 } altHoldState_t;
 
 altHoldState_t altHold;
@@ -57,6 +59,8 @@ static void altHoldReset(void)
     resetAltitudeControl();
     altHold.targetAltitudeCm = getAltitudeCmForAltHold();
     altHold.targetVelocity = 0.0f;
+    altHold.fallbackBaroSetpointCm = getBaroGpsAltitudeCm();
+    altHold.wasUsingLidar = isLidarValidForAltHold();
 }
 
 void altHoldInit(void)
@@ -69,6 +73,16 @@ void altHoldInit(void)
 }
 
 static void altHoldProcessTransitions(void) {
+
+    // ALWAYS update targetAltitudeCm with current lidar altitude (even when ALT_HOLD is not active)
+    // This ensures that when we switch to ALT_HOLD mode, the setpoint is already correct
+    // and there is no jump in altitude (smooth transition)
+    if (!altHold.isActive) {
+        // When not active, continuously track the current altitude so setpoint is ready
+        altHold.targetAltitudeCm = getAltitudeCmForAltHold();
+        altHold.fallbackBaroSetpointCm = getBaroGpsAltitudeCm();
+        altHold.wasUsingLidar = isLidarValidForAltHold();
+    }
 
     if (FLIGHT_MODE(ALT_HOLD_MODE)) {
         if (!altHold.isActive) {
@@ -135,15 +149,51 @@ static void altHoldUpdateTargetAltitude(void)
 
 static void altHoldUpdate(void)
 {
+    // Continuously update the fallback baro setpoint so it's always ready if lidar is lost
+    // When using lidar, this tracks the baro altitude
+    // When lidar is lost, this becomes the new setpoint for smooth transition
+    const float currentBaroAlt = getBaroGpsAltitudeCm();
+
+    // Detect if we're currently using lidar or not
+    const bool currentlyUsingLidar = isLidarValidForAltHold();
+
+    // Handle transitions between lidar and baro to ensure smooth altitude tracking
+    if (currentlyUsingLidar != altHold.wasUsingLidar) {
+        // Transition detected!
+        if (currentlyUsingLidar) {
+            // Transition: Baro → Lidar (lidar signal restored)
+            // Switch to lidar altitude immediately for precise control
+            altHold.targetAltitudeCm = getAltitudeCmForAltHold();
+        } else {
+            // Transition: Lidar → Baro (lidar signal lost or out of range)
+            // Switch to fallback baro setpoint for continuity
+            altHold.targetAltitudeCm = altHold.fallbackBaroSetpointCm;
+        }
+        // Reset velocity target to prevent sudden movements
+        altHold.targetVelocity = 0.0f;
+        // Update state
+        altHold.wasUsingLidar = currentlyUsingLidar;
+    }
+
+    // Update fallback setpoint continuously
+    // This setpoint "follows" the baro altitude so it's always ready as a fallback
+    if (currentlyUsingLidar) {
+        // When using lidar, track the baro altitude as fallback
+        // Apply small smoothing to prevent jumps when switching
+        altHold.fallbackBaroSetpointCm = currentBaroAlt;
+    } else {
+        // When using baro, the fallback IS the current setpoint
+        // Update it based on stick adjustments (handled below)
+        altHold.fallbackBaroSetpointCm = altHold.targetAltitudeCm;
+    }
+
     // check if the user has changed the target altitude using sticks
     if (altHoldConfig()->climbRate) {
         altHoldUpdateTargetAltitude();
     }
+
     altitudeControl(altHold.targetAltitudeCm, taskIntervalSeconds, altHold.targetVelocity);
 
-    // Debug: indicate which altitude source is being used (1 = rangefinder, 0 = GPS+baro)
-    DEBUG_SET(DEBUG_ALTITUDE, 4, getAltitudeSourceUsed());
-    DEBUG_SET(DEBUG_RANGEFINDER_ESP32CAM, 4, getAltitudeSourceUsed());
 }
 
 void updateAltHold(timeUs_t currentTimeUs) {

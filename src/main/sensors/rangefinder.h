@@ -55,6 +55,7 @@ typedef struct rangefinder_s {
     bool snrThresholdReached;
     int32_t dynamicDistanceThreshold;
     int16_t snr;
+    rangefinderType_e sensorType;  // Store sensor type to avoid reading detectedSensors repeatedly
 } rangefinder_t;
 
 void rangefinderResetDynamicThreshold(void);

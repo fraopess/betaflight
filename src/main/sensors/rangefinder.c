@@ -176,6 +176,7 @@ bool rangefinderInit(void)
     rangefinder.maxTiltCos = cos_approx(DECIDEGREES_TO_RADIANS(rangefinder.dev.detectionConeExtendedDeciDegrees / 2.0f));
     rangefinder.lastValidResponseTimeMs = millis();
     rangefinder.snr = 0;
+    rangefinder.sensorType = detectedSensors[SENSOR_INDEX_RANGEFINDER];  // Store sensor type once at init
 
     rangefinderResetDynamicThreshold();
 
@@ -257,19 +258,11 @@ bool rangefinderIsSurfaceAltitudeValid(void)
      */
 
     // Check sensor type at runtime to handle ESP32CAM differently
-    if (detectedSensors[SENSOR_INDEX_RANGEFINDER] == RANGEFINDER_ESP32CAM_TFMINI) {
+    if (rangefinder.sensorType == RANGEFINDER_ESP32CAM_TFMINI) {
         // ESP32CAM doesn't provide SNR, only validate based on rawAltitude
         // This allows validation even when drone is tilted
-        if (rangefinder.rawAltitude > 0) {
-            // Check dynamic threshold if established
-            if (rangefinder.snrThresholdReached && rangefinder.dynamicDistanceThreshold > 0) {
-                return (rangefinder.rawAltitude < rangefinder.dynamicDistanceThreshold);
-            } else {
-                return true;
-            }
-        } else {
-            return false;
-        }
+        // No threshold check needed for ESP32CAM as it doesn't have SNR quality metric
+        return (rangefinder.rawAltitude > 0);
     } else {
         // Standard SNR-based validation for sensors that provide SNR
         // These sensors need both raw and calculated altitude valid
@@ -280,7 +273,7 @@ bool rangefinderIsSurfaceAltitudeValid(void)
         ) {
 
             /*
-             * When critical altitude was determined, distance reported by rangefinder
+             * When critical altitude was dsnrThresholdReachedetermined, distance reported by rangefinder
              * has to be lower than it to assume healthy readout
              */
             if (rangefinder.snrThresholdReached) {
@@ -345,7 +338,7 @@ bool rangefinderProcess(float cosTiltAngle)
     // For ESP32CAM, we don't need SNR validation, so use rawAltitude directly
     if (rangefinder.rawAltitude > 0) {
         // Check sensor type at runtime instead of compile time to ensure proper behavior
-        if (detectedSensors[SENSOR_INDEX_RANGEFINDER] == RANGEFINDER_ESP32CAM_TFMINI) {
+        if (rangefinder.sensorType == RANGEFINDER_ESP32CAM_TFMINI) {
             // ESP32CAM doesn't provide SNR, so always accept readings and make threshold adaptive
             rangefinder.snrThresholdReached = true;
             rangefinder.dynamicDistanceThreshold = rangefinder.rawAltitude * RANGEFINDER_DYNAMIC_FACTOR / 100;
@@ -367,7 +360,7 @@ bool rangefinderProcess(float cosTiltAngle)
         }
     }
 
-    DEBUG_SET(DEBUG_RANGEFINDER, 0, detectedSensors[SENSOR_INDEX_RANGEFINDER]);  // Sensor type
+    DEBUG_SET(DEBUG_RANGEFINDER, 0, rangefinder.sensorType);  // Sensor type
     DEBUG_SET(DEBUG_RANGEFINDER, 1, rangefinder.rawAltitude);
     DEBUG_SET(DEBUG_RANGEFINDER, 2, rangefinder.calculatedAltitude);
     DEBUG_SET(DEBUG_RANGEFINDER, 3, rangefinder.snr);
@@ -375,15 +368,12 @@ bool rangefinderProcess(float cosTiltAngle)
     // Debug mode for rangefinder quality and altitude hold
     // IMPORTANT: This is called AFTER calculatedAltitude is computed
     DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 0, rangefinder.rawAltitude);
-    // Show sensor type in DEBUG[1]: 1=ESP32CAM active, 0=learning/other sensor, 100=threshold active
-    if (detectedSensors[SENSOR_INDEX_RANGEFINDER] == RANGEFINDER_ESP32CAM_TFMINI) {
-        DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 1, rangefinder.snrThresholdReached ? 100 : 1);  // 100=active, 1=ESP32CAM detected
-    } else {
-        DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 1, rangefinder.snrThresholdReached ? 100 : 0);  // 100=active, 0=other sensor
-    }
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 2, rangefinder.dynamicDistanceThreshold);
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 3, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // 100=valid, 0=invalid
-    // DEBUG[4-7] are set in position.c (altitude) and autopilot_multirotor.c (PID values)
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 1, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // 100=valid, 0=invalid
+    // DEBUG[2] is set in autopilot_multirotor.c (altitude setpoint)
+    // DEBUG[3-5] are set in autopilot_multirotor.c (PID values: P, I, D)
+    // DEBUG[6-7] are diagnostic values
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 6, rangefinder.dynamicDistanceThreshold);  // Dynamic threshold
+    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 7, rangefinder.snrThresholdReached ? 100 : 0);  // Threshold reached flag
 
     return true;
 }
