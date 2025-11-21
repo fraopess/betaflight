@@ -85,7 +85,7 @@
 #define PG_ALTHOLD_CONFIG 59
 #define PG_AUTOPILOT 60
 #define PG_POSHOLD_CONFIG 61
-#define PG_ESP32CAM_TFMINI_CONFIG 62
+#define PG_ESP32_HYBRID_CONFIG 62  // ESP32 hybrid sensor (rangefinder + optical flow)
 
 // Driver configuration
 #define PG_DRIVER_PWM_RX_CONFIG 100 // does not exist in betaflight

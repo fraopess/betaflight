@@ -30,6 +30,8 @@
 typedef enum {
     OPTICALFLOW_NONE = 0,
     OPTICALFLOW_MT = 1,
+    OPTICALFLOW_HYBRID_ESP32 = 2,    // ESP32 hybrid sensor (rangefinder + optical flow)
+    OPTICALFLOW_HYBRID_MTF02 = 3,    // MTF-02 hybrid sensor (rangefinder + optical flow)
 } opticalflowType_e;
 
 typedef struct opticalflowConfig_s {
@@ -54,3 +56,8 @@ bool opticalflowInit(void);
 void opticalflowUpdate(void);
 bool isOpticalflowHealthy(void);
 void opticalflowProcess(void);
+
+// Generic optical flow data access for position hold
+float opticalflowGetFlowRateX(void);
+float opticalflowGetFlowRateY(void);
+bool opticalflowIsValid(void);

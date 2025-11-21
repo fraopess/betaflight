@@ -284,10 +284,11 @@ COMMON_SRC = \
             cms/cms_menu_vtx_msp.c
             
 
-ifneq (,$(findstring USE_RANGEFINDER_ESP32CAM_TFMINI,$(EXTRA_FLAGS)))
+ifneq (,$(findstring USE_HYBRID_ESP32,$(EXTRA_FLAGS)))
 COMMON_SRC += \
-    drivers/rangefinder/rangefinder_esp32cam_tfmini.c \
-    pg/esp32cam_tfmini_config.c \
+    drivers/hybrid/esp32/esp32.c \
+    drivers/hybrid/esp32/esp32_config.c \
+    flight/alt_hold_rangefinder.c \
     flight/optical_flow_poshold.c
 endif
 
@@ -431,11 +432,12 @@ TARGET_FLAGS += -DUSE_EXST -DCONFIG_IN_RAM -DRAMBASED
 endif
 
 
-# ESP32Cam-TFMini rangefinder
-ifeq ($(USE_RANGEFINDER_ESP32CAM_TFMINI),yes)
+# ESP32 hybrid sensor (rangefinder + optical flow)
+ifeq ($(USE_HYBRID_ESP32),yes)
 COMMON_SRC += \
-    drivers/rangefinder/rangefinder_esp32cam_tfmini.c \
-    pg/esp32cam_tfmini_config.c \
+    drivers/hybrid/esp32/esp32.c \
+    drivers/hybrid/esp32/esp32_config.c \
+    flight/alt_hold_rangefinder.c \
     flight/optical_flow_poshold.c
 endif
 

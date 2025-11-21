@@ -38,7 +38,7 @@ float getAltitudePidP(void);
 float getAltitudePidI(void);
 float getAltitudePidD(void);
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 void resetPositionControlOpticalFlow(unsigned taskRateHz);
 bool positionControlOpticalFlow(void);
 bool isOpticalFlowAvailable(void);

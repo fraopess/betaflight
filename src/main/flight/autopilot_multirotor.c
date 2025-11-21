@@ -41,7 +41,7 @@
 #include "pg/autopilot.h"
 #include "autopilot.h"
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 #include "flight/optical_flow_poshold.h"
 #include "sensors/rangefinder.h"
 #endif
@@ -225,21 +225,15 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 6, lrintf(-altitudePidD));
     DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 7, lrintf(altitudeF));
 
-    // Also set altitude setpoint and PID values in RANGEFINDER_QUALITY debug mode
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 2, lrintf(targetAltitudeCm));
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 3, lrintf(altitudePidP));
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 4, lrintf(altitudeI));
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 5, lrintf(-altitudePidD));
-
-    // DEBUG_ALT_HOLD mode for altitude hold diagnostics
-    DEBUG_SET(DEBUG_ALT_HOLD, 0, lrintf(rangefinderGetLatestAltitude()));  // Rangefinder altitude (cm)
-    DEBUG_SET(DEBUG_ALT_HOLD, 1, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // Validity (100=valid, 0=invalid)
-    DEBUG_SET(DEBUG_ALT_HOLD, 2, lrintf(targetAltitudeCm));  // Altitude setpoint (cm)
-    DEBUG_SET(DEBUG_ALT_HOLD, 3, lrintf(altitudeErrorCm));  // Altitude error (cm)
-    DEBUG_SET(DEBUG_ALT_HOLD, 4, lrintf(altitudePidP));  // P component
-    DEBUG_SET(DEBUG_ALT_HOLD, 5, lrintf(altitudeI));  // I component
-    DEBUG_SET(DEBUG_ALT_HOLD, 6, lrintf(-altitudePidD));  // D component (negated for display)
-    DEBUG_SET(DEBUG_ALT_HOLD, 7, lrintf(altitudeF));  // F component
+    // DEBUG_ALT_HOLD_RF mode for rangefinder altitude hold diagnostics
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 0, lrintf(rangefinderGetLatestAltitude()));  // Rangefinder altitude (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 1, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // Validity (100=valid, 0=invalid)
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 2, lrintf(targetAltitudeCm));  // Altitude setpoint (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 3, lrintf(altitudeErrorCm));  // Altitude error (cm)
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 4, lrintf(altitudePidP));  // P component
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 5, lrintf(altitudeI));  // I component
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 6, lrintf(-altitudePidD));  // D component (negated for display)
+    DEBUG_SET(DEBUG_ALT_HOLD_RF, 7, lrintf(altitudeF));  // F component
 }
 
 void setSticksActiveStatus(bool areSticksActive)
@@ -438,7 +432,7 @@ float getAltitudePidD(void)
     return altitudePidD;
 }
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 /*
  * Position control using optical flow instead of GPS
  * This is used as a fallback when GPS is not available or has insufficient satellites
@@ -585,11 +579,11 @@ bool positionControlOpticalFlow(void)
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle
 
     // Debug mode for pos_hold sticks and control
-    DEBUG_SET(DEBUG_POSHOLD_STICKS, 0, ap.sticksActive);                            // Sticks active flag
-    DEBUG_SET(DEBUG_POSHOLD_STICKS, 1, lrintf(positionError.x));                    // Position error X (cm)
-    DEBUG_SET(DEBUG_POSHOLD_STICKS, 2, lrintf(positionError.y));                    // Position error Y (cm)
-    DEBUG_SET(DEBUG_POSHOLD_STICKS, 3, lrintf(anglesBF.x * 10));                    // Roll angle before limit (deg × 10)
-    DEBUG_SET(DEBUG_POSHOLD_STICKS, 4, lrintf(anglesBF.y * 10));                    // Pitch angle before limit (deg × 10)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, ap.sticksActive);                            // Sticks active flag
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(positionError.x));                    // Position error X (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.y));                    // Position error Y (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(anglesBF.x * 10));                    // Roll angle before limit (deg × 10)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(anglesBF.y * 10));                    // Pitch angle before limit (deg × 10)
     // Note: DEBUG[5], DEBUG[6], DEBUG[7] are set in pos_hold_multirotor.c (stick deflections)
 
     return true;
@@ -602,6 +596,6 @@ bool isOpticalFlowAvailable(void)
            rangefinderIsHealthy() &&
            opticalFlowIsPositionValid();
 }
-#endif // USE_RANGEFINDER_ESP32CAM_TFMINI
+#endif // USE_OPTICALFLOW
 
 #endif // !USE_WING

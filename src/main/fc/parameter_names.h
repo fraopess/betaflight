@@ -267,7 +267,7 @@
 #define PARAM_NAME_POS_HOLD_DEADBAND "pos_hold_deadband"
 #endif
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 #define PARAM_NAME_OF_POSHOLD_MAX_ANGLE "of_poshold_max_angle"
 #define PARAM_NAME_OF_POSHOLD_PID_P "of_poshold_pid_p"
 #define PARAM_NAME_OF_POSHOLD_PID_I "of_poshold_pid_i"

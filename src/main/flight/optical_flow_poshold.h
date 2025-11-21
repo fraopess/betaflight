@@ -1,10 +1,10 @@
 /*
- * Integration of ESP32Cam-TFMini optical flow data into position estimation
+ * Integration of optical flow data into position estimation
  *
- * This file shows how to integrate the optical flow data from ESP32Cam-TFMini
+ * This module integrates optical flow data from any optical flow sensor
  * into the position hold (POSHOLD) and altitude hold (ALTHOLD) flight modes.
  *
- * The optical flow data will be fused with gyroscope and altitude data.
+ * The optical flow data is fused with gyroscope and altitude data.
  *
  * OPTICAL FLOW AXIS CONVENTION (MAVLink OPTICAL_FLOW_RAD standard):
  *   - flowX: rotation around X (roll) + translation along Y (sideways)
@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 
 // Position estimation structure (body frame)
 // X: forward, Y: left (ESP32CAM convention)
@@ -53,4 +53,4 @@ float getPositionHoldPitchAngle(void);   // Returns pitch angle in decidegrees
 float getPositionHoldRollAngle(void);    // Returns roll angle in decidegrees
 bool isPositionHoldActive(void);
 
-#endif // USE_RANGEFINDER_ESP32CAM_TFMINI
+#endif // USE_OPTICALFLOW

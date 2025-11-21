@@ -39,7 +39,7 @@
 #include "pg/pos_hold.h"
 #include "pos_hold.h"
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 #include "flight/optical_flow_poshold.h"
 #include "sensors/rangefinder.h"
 #endif
@@ -75,9 +75,9 @@ static void posHoldCheckSticks(void)
         setSticksActiveStatus(sticksDeflected);
 
         // Debug stick deflection values
-        DEBUG_SET(DEBUG_POSHOLD_STICKS, 5, lrintf(getRcDeflectionAbs(FD_ROLL) * 1000));   // Roll deflection (0-1000)
-        DEBUG_SET(DEBUG_POSHOLD_STICKS, 6, lrintf(getRcDeflectionAbs(FD_PITCH) * 1000));  // Pitch deflection (0-1000)
-        DEBUG_SET(DEBUG_POSHOLD_STICKS, 7, lrintf(posHold.deadband * 1000));              // Deadband threshold (0-1000)
+        DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(getRcDeflectionAbs(FD_ROLL) * 1000));   // Roll deflection (0-1000)
+        DEBUG_SET(DEBUG_POS_HOLD_OF, 6, lrintf(getRcDeflectionAbs(FD_PITCH) * 1000));  // Pitch deflection (0-1000)
+        DEBUG_SET(DEBUG_POS_HOLD_OF, 7, lrintf(posHold.deadband * 1000));              // Deadband threshold (0-1000)
     }
 }
 
@@ -99,7 +99,7 @@ static bool sensorsOk(void)
     }
 
 tryOpticalFlow:
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
     // Fallback: Optical flow if GPS is not available or insufficient
     if (isOpticalFlowAvailable()) {
         posHold.source = POS_HOLD_SOURCE_OPTICAL_FLOW;
@@ -124,7 +124,7 @@ void updatePosHold(timeUs_t currentTimeUs) {
                 if (posHold.source == POS_HOLD_SOURCE_GPS) {
                     resetPositionControl(&gpsSol.llh, POSHOLD_TASK_RATE_HZ);
                 }
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
                 else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
                     resetPositionControlOpticalFlow(POSHOLD_TASK_RATE_HZ);
                 }
@@ -149,7 +149,7 @@ void updatePosHold(timeUs_t currentTimeUs) {
             if (posHold.source == POS_HOLD_SOURCE_GPS) {
                 posHold.isControlOk = positionControl();
             }
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
             else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
                 posHold.isControlOk = positionControlOpticalFlow();
             }

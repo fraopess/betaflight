@@ -48,6 +48,8 @@
 #include "drivers/time.h"
 #include "drivers/rangefinder/rangefinder.h"
 #include "drivers/rangefinder/rangefinder_lidarmt.h"
+#include "drivers/hybrid/esp32/esp32.h"
+#include "drivers/hybrid/mtf02/mtf02.h"
 
 #include "io/beeper.h"
 
@@ -90,6 +92,24 @@ static bool opticalflowDetect(opticalflowDev_t * dev, uint8_t opticalflowHardwar
 #ifdef USE_RANGEFINDER_MT
             if (mtOpticalflowDetect(dev, rangefinderConfig()->rangefinder_hardware)) {
                 opticalflowHardware = OPTICALFLOW_MT;
+                rescheduleTask(TASK_OPTICALFLOW, TASK_PERIOD_MS(dev->delayMs));
+            }
+#endif
+            break;
+
+        case OPTICALFLOW_HYBRID_ESP32:
+#ifdef USE_HYBRID_ESP32
+            if (esp32OpticalflowDetect(dev)) {
+                opticalflowHardware = OPTICALFLOW_HYBRID_ESP32;
+                rescheduleTask(TASK_OPTICALFLOW, TASK_PERIOD_MS(dev->delayMs));
+            }
+#endif
+            break;
+
+        case OPTICALFLOW_HYBRID_MTF02:
+#ifdef USE_HYBRID_MTF02
+            if (mtf02OpticalflowDetect(dev)) {
+                opticalflowHardware = OPTICALFLOW_HYBRID_MTF02;
                 rescheduleTask(TASK_OPTICALFLOW, TASK_PERIOD_MS(dev->delayMs));
             }
 #endif
@@ -192,4 +212,18 @@ LOCAL_UNUSED_FUNCTION static const opticalflow_t * getLatestFlowOpticalflowData(
 bool isOpticalflowHealthy(void) {
     return cmp32(micros(), opticalflow.timeStampUs) < OPTICALFLOW_HARDWARE_TIMEOUT_US;
 }
+
+// Generic optical flow data access for position hold
+float opticalflowGetFlowRateX(void) {
+    return opticalflow.rawFlowRates.x;
+}
+
+float opticalflowGetFlowRateY(void) {
+    return opticalflow.rawFlowRates.y;
+}
+
+bool opticalflowIsValid(void) {
+    return isOpticalflowHealthy() && (opticalflow.quality > 0);
+}
+
 #endif // USE_OPTICALFLOW

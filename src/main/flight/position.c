@@ -46,6 +46,7 @@
 #include "sensors/barometer.h"
 #ifdef USE_RANGEFINDER
 #include "sensors/rangefinder.h"
+#include "flight/alt_hold_rangefinder.h"
 #endif
 
 #include "pg/pg.h"
@@ -264,41 +265,19 @@ float getBaroGpsAltitudeCm(void)
 bool isLidarValidForAltHold(void)
 {
 #ifdef USE_RANGEFINDER
-    if (sensors(SENSOR_RANGEFINDER)) {
-        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
-        if (rangefinderAlt > 0) {
-            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
-                return true;
-            }
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-            // For ESP32CAM: lidar is valid as soon as we have raw data > 0
-            return true;
-#endif
-        }
-    }
-#endif
+    return rangefinderAltHoldIsValid();
+#else
     return false;
+#endif
 }
 
 // Get altitude for ALTITUDE_HOLD mode, prioritizing rangefinder if available
 float getAltitudeCmForAltHold(void)
 {
 #ifdef USE_RANGEFINDER
-    if (sensors(SENSOR_RANGEFINDER)) {
-        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
-        // For ESP32CAM: prioritize rangefinder as soon as we have valid raw data
-        // For other sensors: apply full validation (healthy + surface valid)
-        if (rangefinderAlt > 0) {
-            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
-                // Fully validated - use calculated altitude with tilt correction
-                return (float)rangefinderGetLatestAltitude();
-            }
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-            // For ESP32CAM: use raw altitude even if not fully validated yet
-            // This ensures we use lidar immediately when entering ALT_HOLD
-            return (float)rangefinderAlt;
-#endif
-        }
+    const float rangefinderAlt = rangefinderAltHoldGetAltitudeCm();
+    if (rangefinderAlt >= 0.0f) {
+        return rangefinderAlt;
     }
 #endif
     // Fall back to GPS+baro altitude
@@ -309,56 +288,10 @@ float getAltitudeCmForAltHold(void)
 float getAltitudeDerivativeForAltHold(void)
 {
 #ifdef USE_RANGEFINDER
-    static float previousLidarAltitudeCm = 0.0f;
-    static float lidarAltitudeDerivative = 0.0f;
-    static pt2Filter_t lidarDerivativeLpf;
-    static bool lidarFilterInitialized = false;
-
-    if (sensors(SENSOR_RANGEFINDER)) {
-        const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
-        // Check if lidar is valid (same logic as getAltitudeCmForAltHold)
-        if (rangefinderAlt > 0) {
-            bool useLidar = false;
-            float currentLidarAltitudeCm = 0.0f;
-
-            if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
-                // Fully validated - use calculated altitude with tilt correction
-                currentLidarAltitudeCm = (float)rangefinderGetLatestAltitude();
-                useLidar = true;
-            }
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-            else {
-                // For ESP32CAM: use raw altitude even if not fully validated yet
-                currentLidarAltitudeCm = (float)rangefinderAlt;
-                useLidar = true;
-            }
-#endif
-
-            if (useLidar) {
-                // Initialize filter if not already done (use same cutoff as baro/GPS derivative)
-                if (!lidarFilterInitialized) {
-                    const float sampleTimeS = HZ_TO_INTERVAL(TASK_ALTITUDE_RATE_HZ);
-                    const float altitudeDerivativeCutoffHz = positionConfig()->altitude_d_lpf / 100.0f;
-                    const float altitudeDerivativeGain = pt2FilterGain(altitudeDerivativeCutoffHz, sampleTimeS);
-                    pt2FilterInit(&lidarDerivativeLpf, altitudeDerivativeGain);
-                    previousLidarAltitudeCm = currentLidarAltitudeCm;
-                    lidarFilterInitialized = true;
-                }
-
-                // Calculate derivative in cm/s
-                lidarAltitudeDerivative = (currentLidarAltitudeCm - previousLidarAltitudeCm) * TASK_ALTITUDE_RATE_HZ;
-                previousLidarAltitudeCm = currentLidarAltitudeCm;
-
-                // Apply same filtering as baro/GPS derivative
-                lidarAltitudeDerivative = pt2FilterApply(&lidarDerivativeLpf, lidarAltitudeDerivative);
-
-                return lidarAltitudeDerivative;
-            }
-        }
+    if (rangefinderAltHoldIsValid()) {
+        const float sampleTimeS = HZ_TO_INTERVAL(TASK_ALTITUDE_RATE_HZ);
+        return rangefinderAltHoldGetDerivativeCmS(sampleTimeS);
     }
-
-    // If we get here, lidar is not available - reset filter for next time
-    lidarFilterInitialized = false;
 #endif
 
     // Fall back to GPS+baro altitude derivative

@@ -214,7 +214,7 @@
 #define USE_CAMERA_CONTROL
 #endif
 
-#if defined(USE_RANGEFINDER_ESP32CAM_TFMINI) && !defined(USE_RANGEFINDER)
+#if defined(USE_OPTICALFLOW) && !defined(USE_RANGEFINDER)
 #define USE_RANGEFINDER
 #endif
 /* END HARDWARE INCLUSIONS */
@@ -612,7 +612,16 @@
 #endif
 #endif // USE_OPTICALFLOW_MT
 
-#if defined(USE_RANGEFINDER_HCSR04) || defined(USE_RANGEFINDER_TF) || defined(USE_RANGEFINDER_MT)
+#if defined(USE_HYBRID_ESP32)
+#ifndef USE_RANGEFINDER
+#define USE_RANGEFINDER
+#endif
+#ifndef USE_OPTICALFLOW
+#define USE_OPTICALFLOW
+#endif
+#endif // USE_HYBRID_ESP32
+
+#if defined(USE_RANGEFINDER_HCSR04) || defined(USE_RANGEFINDER_TF) || defined(USE_RANGEFINDER_MT) || defined(USE_HYBRID_ESP32) || defined(USE_HYBRID_MTF02)
 #ifndef USE_RANGEFINDER
 #define USE_RANGEFINDER
 #endif

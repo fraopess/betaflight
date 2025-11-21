@@ -1,8 +1,8 @@
 /*
  * Implementation of optical flow position estimation and control
  *
- * This integrates ESP32Cam-TFMini optical flow with IMU data for
- * position hold flight mode.
+ * This integrates optical flow from any optical flow sensor with IMU data
+ * for position hold flight mode.
  *
  * Key features:
  * - Body frame only (X: forward, Y: left)
@@ -13,10 +13,10 @@
 
 #include "platform.h"
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 
 #include "optical_flow_poshold.h"
-#include "drivers/rangefinder/rangefinder_esp32cam_tfmini.h"
+#include "sensors/opticalflow.h"
 #include "drivers/rangefinder/rangefinder.h"
 #include "sensors/rangefinder.h"
 #include "sensors/gyro.h"
@@ -119,7 +119,7 @@ void opticalFlowUpdate(void)
     }
 
     // Get optical flow data
-    if (!esp32camTfminiIsFlowValid()) {
+    if (!opticalflowIsValid()) {
         posEstimate.valid = false;
         return;
     }
@@ -135,9 +135,9 @@ void opticalFlowUpdate(void)
     }
 
     // Get raw optical flow rates (rad/s)
-    // ESP32CAM convention: X is forward, Y is left
-    float flowRateX = esp32camTfminiGetFlowRateX();
-    float flowRateY = esp32camTfminiGetFlowRateY();
+    // MAVLink convention: X is forward, Y is left
+    float flowRateX = opticalflowGetFlowRateX();
+    float flowRateY = opticalflowGetFlowRateY();
 
     // Convert flow rates to body-frame velocities (m/s)
     // velocity = flowRate (rad/s) * altitude (m)
@@ -172,14 +172,14 @@ void opticalFlowUpdate(void)
     posEstimate.valid = true;
 
     // Update DEBUG values for blackbox/configurator
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 0, (int)(posEstimate.velocityX * 100));  // Body X velocity (cm/s)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 1, (int)(posEstimate.velocityY * 100));  // Body Y velocity (cm/s)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 2, (int)(posEstimate.positionX * 100));  // Body X position (cm)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 3, (int)(posEstimate.positionY * 100));  // Body Y position (cm)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 4, (int)(velBodyX_raw * 100));            // Raw body X velocity before gyro comp (cm/s)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 5, (int)(velBodyY_raw * 100));            // Raw body Y velocity before gyro comp (cm/s)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 6, (int)(gyroRatePitch * 1000));          // Pitch gyro rate (mrad/s)
-    DEBUG_SET(DEBUG_OPTICAL_FLOW, 7, (int)(gyroRateRoll * 1000));           // Roll gyro rate (mrad/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 0, (int)(posEstimate.velocityX * 100));  // Body X velocity (cm/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 1, (int)(posEstimate.velocityY * 100));  // Body Y velocity (cm/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 2, (int)(posEstimate.positionX * 100));  // Body X position (cm)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 3, (int)(posEstimate.positionY * 100));  // Body Y position (cm)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 4, (int)(velBodyX_raw * 100));            // Raw body X velocity before gyro comp (cm/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 5, (int)(velBodyY_raw * 100));            // Raw body Y velocity before gyro comp (cm/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 6, (int)(gyroRatePitch * 1000));          // Pitch gyro rate (mrad/s)
+    DEBUG_SET(DEBUG_OPTICALFLOW, 7, (int)(gyroRateRoll * 1000));           // Roll gyro rate (mrad/s)
 }
 
 // Get current position estimate
@@ -245,13 +245,13 @@ static float calculatePitchAngle(void)
     float maxAngle = (float)opticalFlowPosHoldConfig()->max_angle;
     angleCommand = constrainf(angleCommand, -maxAngle, maxAngle);
 
-    // Update DEBUG_OF_HOLD
-    DEBUG_SET(DEBUG_OF_HOLD, 0, (int)(opticalFlowIsPositionValid() * 100));  // Valid flag * 100
-    DEBUG_SET(DEBUG_OF_HOLD, 1, (int)(positionErrorX * 100));                 // Position error X (cm)
-    DEBUG_SET(DEBUG_OF_HOLD, 2, (int)(pidP * 10));                            // PID P term * 10
-    DEBUG_SET(DEBUG_OF_HOLD, 3, (int)(pidI * 10));                            // PID I term * 10
-    DEBUG_SET(DEBUG_OF_HOLD, 4, (int)(pidD * 10));                            // PID D term * 10
-    DEBUG_SET(DEBUG_OF_HOLD, 5, (int)(angleCommand * 10));                    // Autopilot angle (decidegrees)
+    // Update DEBUG_POS_HOLD_OF
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, (int)(opticalFlowIsPositionValid() * 100));  // Valid flag * 100
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, (int)(positionErrorX * 100));                 // Position error X (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, (int)(pidP * 10));                            // PID P term * 10
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, (int)(pidI * 10));                            // PID I term * 10
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, (int)(pidD * 10));                            // PID D term * 10
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 5, (int)(angleCommand * 10));                    // Autopilot angle (decidegrees)
 
     // Return angle in decidegrees (Betaflight convention)
     return angleCommand * 10.0f;
@@ -364,4 +364,4 @@ bool opticalFlowIsPositionValid(void)
     return posEstimate.valid;
 }
 
-#endif // USE_RANGEFINDER_ESP32CAM_TFMINI
+#endif // USE_OPTICALFLOW

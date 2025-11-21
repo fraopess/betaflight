@@ -46,7 +46,7 @@
 #include "sensors/rangefinder.h"
 #include "sensors/sensors.h"
 #include "sensors/opticalflow.h"
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
 #include "flight/optical_flow_poshold.h"
 #endif
 
@@ -91,7 +91,7 @@ bool sensorsAutodetect(void)
 
 #ifdef USE_RANGEFINDER
     rangefinderInit();
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
     // Initialize optical flow position estimation for ESP32Cam-TFMini
     opticalFlowInit();
 #endif

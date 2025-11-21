@@ -26,8 +26,8 @@
 #include "platform.h"
 
 #ifdef USE_RANGEFINDER
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-#include "drivers/rangefinder/rangefinder_esp32cam_tfmini.h"
+#ifdef USE_HYBRID_ESP32
+#include "drivers/hybrid/esp32/esp32.h"
 #endif
 #include "build/build_config.h"
 #include "build/debug.h"
@@ -133,10 +133,10 @@ static bool rangefinderDetect(rangefinderDev_t * dev, uint8_t rangefinderHardwar
             break;
 #endif
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_HYBRID_ESP32
         case RANGEFINDER_ESP32CAM_TFMINI:
-            if (esp32camTfminiDetect(dev)) {
-                esp32camTfminiInit(dev);
+            if (esp32HybridDetect(dev)) {
+                esp32HybridInit(dev);
                  rangefinderHardware = RANGEFINDER_ESP32CAM_TFMINI;
             }
             break;
@@ -364,16 +364,6 @@ bool rangefinderProcess(float cosTiltAngle)
     DEBUG_SET(DEBUG_RANGEFINDER, 1, rangefinder.rawAltitude);
     DEBUG_SET(DEBUG_RANGEFINDER, 2, rangefinder.calculatedAltitude);
     DEBUG_SET(DEBUG_RANGEFINDER, 3, rangefinder.snr);
-
-    // Debug mode for rangefinder quality and altitude hold
-    // IMPORTANT: This is called AFTER calculatedAltitude is computed
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 0, rangefinder.rawAltitude);
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 1, rangefinderIsSurfaceAltitudeValid() ? 100 : 0);  // 100=valid, 0=invalid
-    // DEBUG[2] is set in autopilot_multirotor.c (altitude setpoint)
-    // DEBUG[3-5] are set in autopilot_multirotor.c (PID values: P, I, D)
-    // DEBUG[6-7] are diagnostic values
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 6, rangefinder.dynamicDistanceThreshold);  // Dynamic threshold
-    DEBUG_SET(DEBUG_RANGEFINDER_QUALITY, 7, rangefinder.snrThresholdReached ? 100 : 0);  // Threshold reached flag
 
     return true;
 }

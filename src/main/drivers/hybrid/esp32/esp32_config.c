@@ -20,24 +20,24 @@
  */
 
 /*
- * Configuration defaults for ESP32Cam-TFMini sensor
+ * Configuration defaults for ESP32 hybrid sensor
  */
 
 #include "platform.h"
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_HYBRID_ESP32
 
 #include "pg/pg.h"
 #include "pg/pg_ids.h"
-#include "pg/esp32cam_tfmini_config.h"
+#include "drivers/hybrid/esp32/esp32.h"
 
-PG_REGISTER_WITH_RESET_FN(esp32camTfminiConfig_t, esp32camTfminiConfig, PG_ESP32CAM_TFMINI_CONFIG, 0);
+PG_REGISTER_WITH_RESET_FN(esp32HybridConfig_t, esp32HybridConfig, PG_ESP32_HYBRID_CONFIG, 0);
 
 // Default configuration values
 // NOTE: All altitude/distance values are in CENTIMETERS (consistent with baro/GPS)
-void pgResetFn_esp32camTfminiConfig(esp32camTfminiConfig_t *config)
+void pgResetFn_esp32HybridConfig(esp32HybridConfig_t *config)
 {
-    config->alignment = ESP32CAM_TFMINI_ALIGN_DEFAULT;  // No rotation
+    config->alignment = ESP32_HYBRID_ALIGN_DEFAULT;  // No rotation
     config->opticalFlowScale = 100;      // 100% = no scaling
     config->rangefinderScale = 100;      // 100% = no scaling
     config->minAltitudeCm = 10;          // 10cm minimum altitude for valid flow
@@ -46,4 +46,4 @@ void pgResetFn_esp32camTfminiConfig(esp32camTfminiConfig_t *config)
     config->flowInvertY = false;         // Don't invert Y axis
 }
 
-#endif // USE_RANGEFINDER_ESP32CAM_TFMINI
+#endif // USE_HYBRID_ESP32

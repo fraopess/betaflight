@@ -113,7 +113,7 @@
 #include "pg/rcdevice.h"
 #include "pg/stats.h"
 #include "pg/board.h"
-#include "pg/esp32cam_tfmini_config.h"
+#include "drivers/hybrid/esp32/esp32.h"
 #include "pg/optical_flow_poshold.h"
 
 #include "rx/a7105_flysky.h"
@@ -212,17 +212,17 @@ const char * const lookupTableMagHardware[] = {
 #endif
 #if defined(USE_SENSOR_NAMES) || defined(USE_RANGEFINDER)
 const char * const lookupTableRangefinderHardware[] = {
-    "NONE", "HCSR04", "TFMINI", "TF02", "MTF01", "MTF02", "MTF01P", "MTF02P", "TFNOVA", "ESP32CAM_TFMINI"
+    "NONE", "HCSR04", "TFMINI", "TF02", "MTF01", "MTF02", "MTF01P", "MTF02P", "TFNOVA", "ESP32"
 };
 #endif
 #if defined(USE_SENSOR_NAMES) || defined(USE_OPTICALFLOW)
 const char * const lookupTableOpticalflowHardware[] = {
-    "NONE", "MT"
+    "NONE", "MT", "ESP32_HYBRID", "MTF02_HYBRID"
 };
 #endif
 
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-static const char * const lookupTableEsp32camTfminiAlignment[] = {
+#ifdef USE_HYBRID_ESP32
+static const char * const lookupTableEsp32HybridAlignment[] = {
     "DEFAULT", "CW90", "CW180", "CW270", "CW0FLIP", "CW90FLIP", "CW180FLIP", "CW270FLIP"
 };
 #endif
@@ -682,8 +682,8 @@ const lookupTableEntry_t lookupTables[] = {
 #ifdef USE_OPTICALFLOW
     LOOKUP_TABLE_ENTRY(lookupTableOpticalflowHardware),
 #endif
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-    LOOKUP_TABLE_ENTRY(lookupTableEsp32camTfminiAlignment),
+#ifdef USE_HYBRID_ESP32
+    LOOKUP_TABLE_ENTRY(lookupTableEsp32HybridAlignment),
 #endif
 #ifdef USE_GYRO_OVERFLOW_CHECK
     LOOKUP_TABLE_ENTRY(lookupTableGyroOverflowCheck),
@@ -1835,19 +1835,19 @@ const clivalue_t valueTable[] = {
     { "opticalflow_flip_x",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },               PG_OPTICALFLOW_CONFIG, offsetof(opticalflowConfig_t, flip_x) },
 #endif
 
-// PG_ESP32CAM_TFMINI_CONFIG
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
-    { "esp32cam_tfmini_alignment",        VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ESP32CAM_TFMINI_ALIGNMENT }, PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, alignment) },
-    { "esp32cam_tfmini_flow_scale",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, opticalFlowScale) },
-    { "esp32cam_tfmini_range_scale",      VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, rangefinderScale) },
-    { "esp32cam_tfmini_min_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, minAltitudeCm) },
-    { "esp32cam_tfmini_max_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, maxAltitudeCm) },
-    { "esp32cam_tfmini_flow_invert_x",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertX) },
-    { "esp32cam_tfmini_flow_invert_y",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                    PG_ESP32CAM_TFMINI_CONFIG, offsetof(esp32camTfminiConfig_t, flowInvertY) },
+// PG_ESP32_HYBRID_CONFIG
+#ifdef USE_HYBRID_ESP32
+    { "esp32_hybrid_alignment",        VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_ESP32_HYBRID_ALIGNMENT }, PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, alignment) },
+    { "esp32_hybrid_flow_scale",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, opticalFlowScale) },
+    { "esp32_hybrid_range_scale",      VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, rangefinderScale) },
+    { "esp32_hybrid_min_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, minAltitudeCm) },
+    { "esp32_hybrid_max_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, maxAltitudeCm) },
+    { "esp32_hybrid_flow_invert_x",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, flowInvertX) },
+    { "esp32_hybrid_flow_invert_y",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, flowInvertY) },
 #endif
 
 // PG_OF_POSHOLD_CONFIG
-#ifdef USE_RANGEFINDER_ESP32CAM_TFMINI
+#ifdef USE_OPTICALFLOW
     { PARAM_NAME_OF_POSHOLD_MAX_ANGLE,        VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 30},  PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, max_angle) },
     { PARAM_NAME_OF_POSHOLD_PID_P,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_p) },
     { PARAM_NAME_OF_POSHOLD_PID_I,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_i) },
