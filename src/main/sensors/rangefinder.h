@@ -37,6 +37,7 @@ typedef enum {
     RANGEFINDER_MTF02P      = 7,
     RANGEFINDER_TFNOVA      = 8,
     RANGEFINDER_ESP32CAM_TFMINI = 9,
+    RANGEFINDER_MTF02_HYBRID = 10,
 } rangefinderType_e;
 
 typedef struct rangefinderConfig_s {

@@ -292,6 +292,14 @@ COMMON_SRC += \
     flight/optical_flow_poshold.c
 endif
 
+ifneq (,$(findstring USE_HYBRID_MTF02,$(EXTRA_FLAGS)))
+COMMON_SRC += \
+    drivers/hybrid/mtf02/mtf02.c \
+    drivers/hybrid/mtf02/mtf02_config.c \
+    flight/alt_hold_rangefinder.c \
+    flight/optical_flow_poshold.c
+endif
+
 ifneq ($(SIMULATOR_BUILD),yes)
 
 COMMON_SRC += \
@@ -437,6 +445,15 @@ ifeq ($(USE_HYBRID_ESP32),yes)
 COMMON_SRC += \
     drivers/hybrid/esp32/esp32.c \
     drivers/hybrid/esp32/esp32_config.c \
+    flight/alt_hold_rangefinder.c \
+    flight/optical_flow_poshold.c
+endif
+
+# MTF-02 hybrid sensor (rangefinder + optical flow)
+ifeq ($(USE_HYBRID_MTF02),yes)
+COMMON_SRC += \
+    drivers/hybrid/mtf02/mtf02.c \
+    drivers/hybrid/mtf02/mtf02_config.c \
     flight/alt_hold_rangefinder.c \
     flight/optical_flow_poshold.c
 endif

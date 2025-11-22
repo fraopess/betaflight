@@ -1,10 +1,10 @@
-# Betaflight - ESP32-S3 CAM + Lidar Fork
+# Betaflight - GPS-Free Indoor Flight Fork
 
 This fork of Betaflight adds support for GPS-free indoor flight capabilities using optical flow and lidar-based position and altitude control.
 
 ## Overview
 
-This fork extends Betaflight with integrated support for the **ESP32-S3 CAM** module combined with **TFMini lidar rangefinder** to enable GPS-free flight modes including:
+This fork extends Betaflight with integrated support for hybrid optical flow + rangefinder sensors to enable GPS-free flight modes including:
 
 - **Altitude Hold (ALTHOLD)** - using lidar rangefinder for precise altitude measurement
 - **Position Hold (POSHOLD)** - using optical flow for horizontal position stabilization
@@ -13,20 +13,34 @@ These capabilities make it possible to fly indoors or in GPS-denied environments
 
 ## Key Features
 
-### ESP32-S3 CAM Integration
-- Optical flow sensor for horizontal velocity and position estimation
-- Gyroscopic compensation for accurate motion tracking
+### Supported Sensors
+
+#### ESP32-S3 CAM + TFMini (Hybrid System)
+- **ESP32-S3 CAM** for optical flow
+- **TFMini/TFMini Plus** for rangefinding
+- Separate UART connections for each component
 - Configurable sensor alignment (0°, 90°, 180°, 270° with flip options)
 - MAVLink OPTICAL_FLOW_RAD protocol compatibility
 - Adjustable flow and rangefinder scaling factors
 - Configurable altitude range for valid optical flow data
-- Low-pass filtering for smooth velocity estimates
 
-### TFMini Lidar Support
+#### MTF-02 Hybrid Sensor (Integrated Solution)
+- **All-in-one** integrated rangefinder + optical flow sensor
+- Single UART connection (115200 baud)
+- Built-in optical flow processor
+- Distance measurement: 10-1200 cm
+- Flow data includes quality indicator
+- Configurable flow scaling and axis inversion
+- Lower power consumption than separate sensors
+- Compact form factor ideal for small drones
+
+### Common Features
+- Optical flow sensor for horizontal velocity and position estimation
+- Gyroscopic compensation for accurate motion tracking
+- Low-pass filtering for smooth velocity estimates
 - High-precision distance measurement for altitude hold
 - Centimeter-level accuracy for indoor flight
 - Automatic sensor detection and initialization
-- Compatible with TFMini and TFMini Plus models
 - Serial communication interface (UART)
 
 ### Position Hold Flight Mode
@@ -47,45 +61,111 @@ These capabilities make it possible to fly indoors or in GPS-denied environments
 ## Hardware Requirements
 
 ### Required Components
+
+**Option 1: ESP32-S3 CAM + TFMini**
 1. **Flight Controller** - STM32 F4, F7, or H7 based Betaflight-compatible FC
 2. **ESP32-S3 CAM Module** - with optical flow sensor capability
 3. **TFMini Lidar** - or TFMini Plus rangefinder
-4. **UART Connection** - between FC and ESP32-S3 CAM/TFMini
+4. **UART Connection** - between FC and ESP32-S3 CAM (one UART port required)
+
+**Option 2: MTF-02 Hybrid Sensor **
+1. **Flight Controller** - STM32 F4, F7, or H7 based Betaflight-compatible FC
+2. **MTF-02 Sensor** - integrated rangefinder + optical flow module
+3. **UART Connection** - between FC and MTF-02 (one UART port required)
 
 ### Wiring
+
+**ESP32-S3 CAM + TFMini:**
 - Connect ESP32-S3 CAM to flight controller UART (TX, RX, GND, 5V)
 - Connect TFMini lidar to flight controller UART or pass-through ESP32
 - Ensure proper power supply (5V) for both modules
 - Mount sensors facing downward for ground distance measurement
 
+**MTF-02 Hybrid Sensor:**
+- Connect MTF-02 TX to FC RX pin
+- Connect MTF-02 RX to FC TX pin
+- Connect GND to GND
+- Connect VCC to 5V
+- Mount sensor facing downward for ground distance measurement
+- Only one UART port needed (simpler wiring than ESP32 option)
+
 ## Configuration
 
 ### CLI Commands
 
-Configure the ESP32-S3 CAM and TFMini sensor:
+#### Option 1: ESP32-S3 CAM + TFMini Configuration
 
-```
-# Enable the sensor
-set esp32cam_tfmini_hardware = ESP32CAM
+```bash
+# Set rangefinder hardware
+set rangefinder_hardware = ESP32
+
+# Set optical flow hardware
+set opticalflow_hardware = ESP32_HYBRID
 
 # Set sensor alignment (0-7)
-set esp32cam_tfmini_alignment = 0
+set esp32_hybrid_alignment = 0
 
 # Optical flow scale factor (0-200%, default 100)
-set esp32cam_tfmini_optical_flow_scale = 100
+set esp32_hybrid_flow_scale = 100
 
 # Rangefinder scale factor (0-200%, default 100)
-set esp32cam_tfmini_rangefinder_scale = 100
+set esp32_hybrid_range_scale = 100
 
 # Minimum altitude for valid optical flow (cm)
-set esp32cam_tfmini_min_altitude_cm = 10
+set esp32_hybrid_min_alt_cm = 10
 
 # Maximum altitude for valid optical flow (cm, 0 = use sensor max)
-set esp32cam_tfmini_max_altitude_cm = 120
+set esp32_hybrid_max_alt_cm = 120
 
 # Invert flow axes if needed
-set esp32cam_tfmini_flow_invert_x = OFF
-set esp32cam_tfmini_flow_invert_y = OFF
+set esp32_hybrid_flow_invert_x = OFF
+set esp32_hybrid_flow_invert_y = OFF
+
+# Save configuration
+save
+```
+
+#### Option 2: MTF-02 Hybrid Sensor Configuration
+
+```bash
+# Set rangefinder hardware to MTF-02
+set rangefinder_hardware = MTF02_HYBRID
+
+# Set optical flow hardware to MTF-02
+set opticalflow_hardware = MTF02_HYBRID
+
+# Minimum valid range (cm, default 10)
+set mtf02_min_range_cm = 10
+
+# Maximum valid range (cm, default 1200)
+set mtf02_max_range_cm = 1200
+
+# Minimum flow quality threshold (0-255, default 20)
+set mtf02_min_quality = 20
+
+# Flow scale factor (0-200%, default 100)
+set mtf02_flow_scale = 100
+
+# Invert flow axes if needed
+set mtf02_flow_invert_x = OFF
+set mtf02_flow_invert_y = OFF
+
+# Save configuration
+save
+```
+
+#### Serial Port Configuration
+
+For ESP32 hybrid sensor, configure the serial port:
+```bash
+# Example for UART3 (serial port 2)
+serial 2 115200 524288    # 524288 = FUNCTION_ESP32CAM_TFMINI
+```
+
+For MTF-02 hybrid sensor, configure the serial port:
+```bash
+# Example for UART3 (serial port 2)
+serial 2 115200 1048576   # 1048576 = FUNCTION_HYBRID_MTF02
 ```
 
 ### Position Hold PID Configuration
@@ -109,18 +189,6 @@ set optical_flow_poshold_stick_deadband = 12
 save
 ```
 
-### Rangefinder Configuration
-
-Configure the rangefinder hardware:
-
-```
-# Enable TFMini lidar
-set rangefinder_hardware = TFMINI
-
-# Save configuration
-save
-```
-
 ## Flight Modes
 
 ### Altitude Hold (ALTHOLD)
@@ -139,6 +207,8 @@ save
 
 ## Usage Tips
 
+### General Tips
+
 1. **Surface Requirements** - Optical flow works best on textured surfaces. Avoid plain, featureless floors.
 
 2. **Lighting** - Ensure adequate lighting for optical flow sensor. Avoid direct sunlight or complete darkness.
@@ -154,7 +224,55 @@ save
 
 6. **Stick Control** - Small stick movements will deactivate position hold. Return sticks to center to re-engage.
 
+### MTF-02 Specific Tips
+
+1. **Quality Threshold** - If experiencing drift, increase `mtf02_min_quality` (default 20). Higher values require better surface texture.
+
+2. **Flow Scaling** - If position hold is too aggressive or too weak, adjust `mtf02_flow_scale`:
+   - Decrease (< 100) if corrections are too strong
+   - Increase (> 100) if corrections are too weak
+
+3. **Axis Inversion** - If drone moves in wrong direction during position hold:
+   - Set `mtf02_flow_invert_x = ON` if left/right movement is inverted
+   - Set `mtf02_flow_invert_y = ON` if forward/back movement is inverted
+
+4. **Range Limits** - Adjust `mtf02_min_range_cm` and `mtf02_max_range_cm` based on your flying environment:
+   - Increase min range if getting false readings near ground
+   - Decrease max range if experiencing noise at higher altitudes
+
+5. **Sensor Mounting** - Ensure MTF-02 is mounted:
+   - Facing straight down (perpendicular to ground)
+   - Away from propeller wash and vibration sources
+   - With clear view of ground (no obstructions)
+
 ## Technical Details
+
+### MTF-02 Protocol Specification
+
+The MTF-02 uses a binary serial protocol at 115200 baud (8N1):
+
+**Frame Structure (16 bytes total):**
+```
+[0x59][0x59][DIST_LSB][DIST_MSB][STR_LSB][STR_MSB]
+[FLOW_X_LSB][FLOW_X_MSB][FLOW_Y_LSB][FLOW_Y_MSB][QUALITY]
+[RESERVED1][RESERVED2][RESERVED3][CHECKSUM]
+```
+
+**Field Descriptions:**
+- **Sync Bytes**: `0x59 0x59` (header)
+- **Distance**: 16-bit little-endian, distance in centimeters
+- **Strength**: 16-bit little-endian, signal strength (> 100 for valid)
+- **Flow X/Y**: 16-bit signed little-endian, velocity in cm/s at 1m height
+- **Quality**: 8-bit flow quality indicator (0-255)
+- **Reserved**: 3 bytes for future use
+- **Checksum**: Sum of sync bytes + all payload bytes
+
+**Flow Velocity Conversion:**
+```
+actual_velocity (m/s) = (flow_velocity_cm/s * actual_height_m) / 100
+flow_rate (rad/s) = actual_velocity / actual_height_m
+                  = flow_velocity / 100  // Simplified
+```
 
 ### Coordinate System
 - **Body Frame**: X (forward), Y (left), Z (up)
@@ -166,40 +284,78 @@ save
   - flowY → forward/back body motion
 
 ### Update Rates
+- MTF-02 sensor: 100 Hz (10ms update period)
+- ESP32 sensor: 20-50 Hz (adjustable)
 - Position estimation: 50 Hz
 - Velocity filtering: 5 Hz low-pass filter cutoff
 - PID controller: runs at main loop rate
 
 ### Implementation Files
+
 Key implementation files for reference:
-- [esp32cam_tfmini_config.h](src/main/pg/esp32cam_tfmini_config.h) - Sensor configuration
+
+**ESP32 Hybrid Sensor:**
+- [esp32.c](src/main/drivers/hybrid/esp32/esp32.c) - ESP32 hybrid sensor driver
+- [esp32.h](src/main/drivers/hybrid/esp32/esp32.h) - ESP32 protocol definitions
+- [esp32_config.c](src/main/drivers/hybrid/esp32/esp32_config.c) - ESP32 configuration
+
+**MTF-02 Hybrid Sensor:**
+- [mtf02.c](src/main/drivers/hybrid/mtf02/mtf02.c) - MTF-02 hybrid sensor driver
+- [mtf02.h](src/main/drivers/hybrid/mtf02/mtf02.h) - MTF-02 protocol definitions
+- [mtf02_config.c](src/main/drivers/hybrid/mtf02/mtf02_config.c) - MTF-02 configuration
+- [hybrid_mtf02.h](src/main/pg/hybrid_mtf02.h) - MTF-02 parameter group
+
+**Common:**
 - [optical_flow_poshold.c](src/main/flight/optical_flow_poshold.c) - Position hold controller
-- [opticalflow.c](src/main/sensors/opticalflow.c) - Optical flow sensor driver
-- [rangefinder_lidartf.c](src/main/drivers/rangefinder/rangefinder_lidartf.c) - TFMini lidar driver
+- [alt_hold_rangefinder.c](src/main/flight/alt_hold_rangefinder.c) - Altitude hold controller
+- [opticalflow.c](src/main/sensors/opticalflow.c) - Optical flow sensor abstraction
+- [rangefinder.c](src/main/sensors/rangefinder.c) - Rangefinder sensor abstraction
 
 ## Future Enhancements
 
 This fork is under active development. Planned features include:
 
-- Support for additional optical flow sensors (PMW3901, etc.)
-- Support for additional lidar models (VL53L0X, VL53L1X, etc.)
-- Advanced position estimation with Kalman filtering
-- Way point navigation for autonomous indoor flight
 - Obstacle avoidance using multiple rangefinders
 - Integration with additional sensors (ultrasonic, stereo cameras)
 
 ## Compilation
 
-Build with support for ESP32-CAM and TFMini:
+### Option 1: Build with ESP32 Hybrid Sensor Support
 
+**Using Makefile variable:**
 ```bash
-make TARGET=<your_target> USE_RANGEFINDER_ESP32CAM_TFMINI=yes
+make TARGET=<your_target> USE_HYBRID_ESP32=yes
 ```
 
-Or enable in `target.h`:
-```c
-#define USE_RANGEFINDER_ESP32CAM_TFMINI
+**Or using EXTRA_FLAGS:**
+```bash
+make TARGET=<your_target> EXTRA_FLAGS="-DUSE_HYBRID_ESP32"
 ```
+
+**Or enable in `target.h`:**
+```c
+#define USE_HYBRID_ESP32
+```
+
+### Option 2: Build with MTF-02 Hybrid Sensor Support
+
+**Using Makefile variable:**
+```bash
+make TARGET=<your_target> USE_HYBRID_MTF02=yes
+```
+
+**Or using EXTRA_FLAGS:**
+```bash
+make TARGET=<your_target> EXTRA_FLAGS="-DUSE_HYBRID_MTF02"
+```
+
+**Or enable in `target.h`:**
+```c
+#define USE_HYBRID_MTF02
+```
+
+
+
 
 ## Support & Contributions
 

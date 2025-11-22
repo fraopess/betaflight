@@ -114,6 +114,7 @@
 #include "pg/stats.h"
 #include "pg/board.h"
 #include "drivers/hybrid/esp32/esp32.h"
+#include "pg/hybrid_mtf02.h"
 #include "pg/optical_flow_poshold.h"
 
 #include "rx/a7105_flysky.h"
@@ -212,7 +213,7 @@ const char * const lookupTableMagHardware[] = {
 #endif
 #if defined(USE_SENSOR_NAMES) || defined(USE_RANGEFINDER)
 const char * const lookupTableRangefinderHardware[] = {
-    "NONE", "HCSR04", "TFMINI", "TF02", "MTF01", "MTF02", "MTF01P", "MTF02P", "TFNOVA", "ESP32"
+    "NONE", "HCSR04", "TFMINI", "TF02", "MTF01", "MTF02", "MTF01P", "MTF02P", "TFNOVA", "ESP32", "MTF02_HYBRID"
 };
 #endif
 #if defined(USE_SENSOR_NAMES) || defined(USE_OPTICALFLOW)
@@ -1844,6 +1845,16 @@ const clivalue_t valueTable[] = {
     { "esp32_hybrid_max_alt_cm",       VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, maxAltitudeCm) },
     { "esp32_hybrid_flow_invert_x",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, flowInvertX) },
     { "esp32_hybrid_flow_invert_y",    VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_ESP32_HYBRID_CONFIG, offsetof(esp32HybridConfig_t, flowInvertY) },
+#endif
+
+// PG_MTF02_HYBRID_CONFIG
+#ifdef USE_HYBRID_MTF02
+    { "mtf02_min_range_cm",        VAR_UINT16 | MASTER_VALUE,               .config.minmaxUnsigned = {1, 2000},                PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, min_range_cm) },
+    { "mtf02_max_range_cm",        VAR_UINT16 | MASTER_VALUE,               .config.minmaxUnsigned = {1, 2000},                PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, max_range_cm) },
+    { "mtf02_min_quality",         VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 255},                 PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, min_quality) },
+    { "mtf02_flow_scale",          VAR_UINT8  | MASTER_VALUE,               .config.minmaxUnsigned = {0, 200},                 PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, flow_scale) },
+    { "mtf02_flow_invert_x",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, flow_invert_x) },
+    { "mtf02_flow_invert_y",       VAR_UINT8  | MASTER_VALUE | MODE_LOOKUP, .config.lookup = { TABLE_OFF_ON },                 PG_MTF02_HYBRID_CONFIG, offsetof(hybridMtf02Config_t, flow_invert_y) },
 #endif
 
 // PG_OF_POSHOLD_CONFIG

@@ -29,6 +29,9 @@
 #ifdef USE_HYBRID_ESP32
 #include "drivers/hybrid/esp32/esp32.h"
 #endif
+#ifdef USE_HYBRID_MTF02
+#include "drivers/hybrid/mtf02/mtf02.h"
+#endif
 #include "build/build_config.h"
 #include "build/debug.h"
 
@@ -142,6 +145,15 @@ static bool rangefinderDetect(rangefinderDev_t * dev, uint8_t rangefinderHardwar
             break;
 #endif
 
+#ifdef USE_HYBRID_MTF02
+        case RANGEFINDER_MTF02_HYBRID:
+            if (mtf02Detect(dev)) {
+                mtf02Init(dev);
+                rangefinderHardware = RANGEFINDER_MTF02_HYBRID;
+                rescheduleTask(TASK_RANGEFINDER, TASK_PERIOD_MS(dev->delayMs));
+            }
+            break;
+#endif
 
         case RANGEFINDER_NONE:
             rangefinderHardware = RANGEFINDER_NONE;
