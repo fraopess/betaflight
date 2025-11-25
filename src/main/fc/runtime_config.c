@@ -33,6 +33,9 @@ uint16_t flightModeFlags = 0;
 
 static uint32_t enabledSensors = 0;
 
+// Debug arm mode - allows arming with MSP connected while keeping motors disabled
+static bool debugArmModeActive = false;
+
 // Name must be no longer than OSD_WARNINGS_MAX_SIZE
 // try to keep names within OSD_WARNINGS_PREFFERED_SIZE
 const char *armingDisableFlagNames[]= {
@@ -147,4 +150,14 @@ void sensorsClear(uint32_t mask)
 uint32_t sensorsMask(void)
 {
     return enabledSensors;
+}
+
+bool isDebugArmModeActive(void)
+{
+    return debugArmModeActive;
+}
+
+void setDebugArmMode(bool enabled)
+{
+    debugArmModeActive = enabled;
 }

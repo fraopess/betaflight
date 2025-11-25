@@ -136,3 +136,6 @@ void sensorsSet(uint32_t mask);
 void sensorsClear(uint32_t mask);
 uint32_t sensorsMask(void);
 
+bool isDebugArmModeActive(void);
+void setDebugArmMode(bool enabled);
+

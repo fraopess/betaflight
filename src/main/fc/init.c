@@ -413,6 +413,7 @@ void init(void)
 #endif
 
     debugMode = systemConfig()->debug_mode;
+    setDebugArmMode(systemConfig()->debugArmMode);
 
 #ifdef TARGET_PREINIT
     targetPreInit();

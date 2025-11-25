@@ -477,8 +477,8 @@ static void applyMixToMotors(const float motorMix[MAX_SUPPORTED_MOTORS], motorMi
         motor[i] = motorOutput;
     }
 
-    // Disarmed mode
-    if (!ARMING_FLAG(ARMED)) {
+    // Disarmed mode or debug_arm mode (motors always off in debug_arm)
+    if (!ARMING_FLAG(ARMED) || isDebugArmModeActive()) {
         for (int i = 0; i < mixerRuntime.motorCount; i++) {
             motor[i] = motor_disarmed[i];
         }

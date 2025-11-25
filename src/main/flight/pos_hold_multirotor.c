@@ -78,31 +78,33 @@ static void posHoldCheckSticks(void)
 
 static bool sensorsOk(void)
 {
-    // First priority: GPS with sufficient satellites
+    // First priority: GPS with sufficient satellites and compass
     if (STATE(GPS_FIX) && gpsSol.numSat >= GPS_MIN_SAT_COUNT) {
-        // Check compass if required
-        if (
+        // Check compass requirement for GPS mode
 #ifdef USE_MAG
-            !compassIsHealthy() &&
+        const bool compassOk = compassIsHealthy();
+#else
+        const bool compassOk = true; // No compass compiled in
 #endif
-            (!posHoldConfig()->posHoldWithoutMag || !canUseGPSHeading)) {
-            // Compass required but not healthy, try optical flow fallback
-            goto tryOpticalFlow;
+        const bool canBypassCompass = posHoldConfig()->posHoldWithoutMag && canUseGPSHeading;
+
+        if (compassOk || canBypassCompass) {
+            // GPS is available with either compass or GPS heading
+            posHold.source = POS_HOLD_SOURCE_GPS;
+            return true;
         }
-        posHold.source = POS_HOLD_SOURCE_GPS;
-        return true;
+        // GPS available but compass requirement not met - fall through to try optical flow
     }
 
-tryOpticalFlow:
 #ifdef USE_OPTICALFLOW
-    // Fallback: Optical flow if GPS is not available or insufficient
+    // Second priority: Optical flow (independent of compass/mag)
     if (isOpticalFlowAvailable()) {
         posHold.source = POS_HOLD_SOURCE_OPTICAL_FLOW;
         return true;
     }
 #endif
 
-    // No valid position source
+    // No valid position source available
     posHold.source = POS_HOLD_SOURCE_NONE;
     return false;
 }

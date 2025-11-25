@@ -497,83 +497,67 @@ bool positionControlOpticalFlow(void)
         return false;
     }
 
-    // Calculate position error in cm (East, North)
+    // Calculate position error in cm (body frame: X=forward, Y=left)
     vector2_t positionError;
-    positionError.x = ofAp.targetPosition.x - (posEstimate.positionX * 100.0f); // East error (cm)
-    positionError.y = ofAp.targetPosition.y - (posEstimate.positionY * 100.0f); // North error (cm)
+    positionError.x = ofAp.targetPosition.x - (posEstimate.positionX * 100.0f); // Forward error (cm)
+    positionError.y = ofAp.targetPosition.y - (posEstimate.positionY * 100.0f); // Left error (cm)
 
-    // Calculate velocity in cm/s
+    // Calculate velocity in cm/s (body frame)
     vector2_t velocity;
-    velocity.x = posEstimate.velocityX * 100.0f; // East velocity (cm/s)
-    velocity.y = posEstimate.velocityY * 100.0f; // North velocity (cm/s)
-
-    // PID controller with integral term for better hold performance
-    vector2_t pidSum = {0};
+    velocity.x = posEstimate.velocityX * 100.0f; // Forward velocity (cm/s)
+    velocity.y = posEstimate.velocityY * 100.0f; // Left velocity (cm/s)
 
     // Update rate: assume 10Hz optical flow updates (100ms)
     const float dataInterval = 0.1f;
     const float iTermLeakGain = 1.0f - pt1FilterGainFromDelay(2.5f, dataInterval); // 2.5s time constant
 
-    // Variables to capture X-axis PID components for debug
-    float pidPx = 0.0f, pidIx = 0.0f, pidDx = 0.0f;
+    // PID controller in body frame - no rotation needed!
+    // X axis (forward) controls PITCH, Y axis (left) controls ROLL
 
-    for (axisEF_e efAxisIdx = LON; efAxisIdx <= LAT; efAxisIdx++) {
-        // P term: position error
-        const float pidP = positionError.v[efAxisIdx] * positionPidCoeffs.Kp;
+    // --- X axis (forward → pitch) ---
+    const float pidPx = positionError.x * positionPidCoeffs.Kp;
 
-        // I term: accumulate position error (only when not moving sticks)
-        if (!ap.sticksActive) {
-            ofAp.integral.v[efAxisIdx] += positionError.v[efAxisIdx] * dataInterval;
-            // Limit integral to prevent windup
-            ofAp.integral.v[efAxisIdx] = constrainf(ofAp.integral.v[efAxisIdx], -10000.0f, 10000.0f);
-        } else {
-            // Slowly leak integral when sticks are active
-            ofAp.integral.v[efAxisIdx] *= iTermLeakGain;
-        }
-        const float pidI = ofAp.integral.v[efAxisIdx] * positionPidCoeffs.Ki;
-
-        // D term: velocity (acts as damping)
-        const float pidD = velocity.v[efAxisIdx] * positionPidCoeffs.Kd;
-
-        pidSum.v[efAxisIdx] = pidP + pidI - pidD; // Note: negative D to oppose velocity
-
-        // Capture X-axis (LON) PID components for debug
-        if (efAxisIdx == LON) {
-            pidPx = pidP;
-            pidIx = pidI;
-            pidDx = pidD;
-        }
+    if (!ap.sticksActive) {
+        ofAp.integral.x += positionError.x * dataInterval;
+        ofAp.integral.x = constrainf(ofAp.integral.x, -10000.0f, 10000.0f);
+    } else {
+        ofAp.integral.x *= iTermLeakGain;
     }
+    const float pidIx = ofAp.integral.x * positionPidCoeffs.Ki;
+    const float pidDx = velocity.x * positionPidCoeffs.Kd;
+    const float pitchAngle = pidPx + pidIx - pidDx; // Forward error → positive pitch
 
-    // Rotate PID output from Earth Frame to Body Frame
-    // attitude.values.yaw increases clockwise from north
-    const float angle = DECIDEGREES_TO_RADIANS(attitude.values.yaw - 900);
-    vector2_t pidBodyFrame;
-    vector2Rotate(&pidBodyFrame, &pidSum, angle);
+    // --- Y axis (left → roll) ---
+    const float pidPy = positionError.y * positionPidCoeffs.Kp;
+
+    if (!ap.sticksActive) {
+        ofAp.integral.y += positionError.y * dataInterval;
+        ofAp.integral.y = constrainf(ofAp.integral.y, -10000.0f, 10000.0f);
+    } else {
+        ofAp.integral.y *= iTermLeakGain;
+    }
+    const float pidIy = ofAp.integral.y * positionPidCoeffs.Ki;
+    const float pidDy = velocity.y * positionPidCoeffs.Kd;
+    const float rollAngle = -(pidPy + pidIy - pidDy); // Left error → negative roll
 
     vector2_t anglesBF;
-    anglesBF.v[AI_ROLL] = -pidBodyFrame.y;  // Negative roll to fly left
-    anglesBF.v[AI_PITCH] = pidBodyFrame.x;  // Positive pitch for forward
 
     if (ap.sticksActive) {
-        // Sticks are active: add stick input as angle offset to position hold control
-        // Scale stick deflection to angle (full stick deflection = maxAngle degrees)
-        const float stickRoll = getRcDeflection(FD_ROLL) * ofAp.maxAngle;
-        const float stickPitch = getRcDeflection(FD_PITCH) * ofAp.maxAngle;
-
-        anglesBF.v[AI_ROLL] += stickRoll;
-        anglesBF.v[AI_PITCH] += stickPitch;
-
-        // Update target to current position
+        // Sticks are active: zero autopilot output, give full control to pilot (match GPS behavior)
+        anglesBF = (vector2_t){{0, 0}};
+        // Update target to current position so position hold resumes smoothly when sticks released
         ofAp.targetPosition.x = posEstimate.positionX * 100.0f;
         ofAp.targetPosition.y = posEstimate.positionY * 100.0f;
-        // Note: integral leak is handled in the loop above
-    }
+    } else {
+        // Apply PID output
+        anglesBF.v[AI_PITCH] = pitchAngle;
+        anglesBF.v[AI_ROLL] = rollAngle;
 
-    // Limit angle vector to maxAngle
-    const float mag = vector2Norm(&anglesBF);
-    if (mag > ofAp.maxAngle && mag > 0.0f) {
-        vector2Scale(&anglesBF, &anglesBF, ofAp.maxAngle / mag);
+        // Limit angle vector to maxAngle
+        const float mag = vector2Norm(&anglesBF);
+        if (mag > ofAp.maxAngle && mag > 0.0f) {
+            vector2Scale(&anglesBF, &anglesBF, ofAp.maxAngle / mag);
+        }
     }
 
     ofAp.pidSumBF = anglesBF;
@@ -583,16 +567,16 @@ bool positionControlOpticalFlow(void)
         autopilotAngle[i] = pt3FilterApply(&ofAp.upsampleLpfBF[i], ofAp.pidSumBF.v[i]);
     }
 
-    // Debug output
+    // Debug output for DEBUG_AUTOPILOT_POSITION
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 0, lrintf(vector2Norm(&positionError)));     // Distance to target (cm)
-    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 1, lrintf(positionError.x));                 // X error (cm)
-    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 2, lrintf(pidSum.x * 10));                   // X PID output
-    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 1, lrintf(positionError.x));                 // X forward error (cm)
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 2, lrintf(pitchAngle * 10));                 // Pitch angle output (deg × 10)
+    DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle after upsampling (deg × 10)
 
-    // Debug mode for optical flow position hold (X-axis only)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, lrintf(velocity.x));                         // Velocity X input (cm/s)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(posEstimate.positionX * 100.0f));    // Estimated position X (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.x));                    // Position error X (cm)
+    // Debug mode for optical flow position hold (X-axis body frame only)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, lrintf(velocity.x));                         // Velocity X forward (cm/s)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(posEstimate.positionX * 100.0f));    // Estimated position X forward (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.x));                    // Position error X forward (cm)
     DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(pidPx * 10));                         // P component (deg × 10)
     DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(pidIx * 10));                         // I component (deg × 10)
     DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(pidDx * 10));                         // D component (deg × 10)

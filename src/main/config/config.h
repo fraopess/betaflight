@@ -42,6 +42,7 @@ typedef struct systemConfig_s {
     uint8_t hseMhz;                 // Only used for F4 and G4 targets
     uint8_t configurationState;     // The state of the configuration (defaults / configured)
     uint8_t enableStickArming; // boolean that determines whether stick arming can be used
+    uint8_t debugArmMode;      // boolean that enables debug arm mode (motors off when armed with MSP)
 } systemConfig_t;
 
 PG_DECLARE(systemConfig_t, systemConfig);
