@@ -141,7 +141,25 @@ void updatePosHold(timeUs_t currentTimeUs) {
         posHoldCheckSticks();
 
         // Update sensor health status continuously, not just at initialization
+        const bool previousSensorsOk = posHold.areSensorsOk;
         posHold.areSensorsOk = sensorsOk();
+
+        // Detect sensor recovery: transition from unavailable to available
+        const bool sensorsRecovered = !previousSensorsOk && posHold.areSensorsOk;
+
+        if (sensorsRecovered) {
+            // Sensors came back online - re-initialize the controller to clear stale state
+            if (posHold.source == POS_HOLD_SOURCE_GPS) {
+                resetPositionControl(&gpsSol.llh, POSHOLD_TASK_RATE_HZ);
+            }
+#ifdef USE_OPTICALFLOW
+            else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
+                // Reset optical flow position estimate and controller state
+                opticalFlowResetPosition();
+                resetPositionControlOpticalFlow(POSHOLD_TASK_RATE_HZ);
+            }
+#endif
+        }
 
         if (posHold.areSensorsOk) {
             // Use the appropriate position controller based on source

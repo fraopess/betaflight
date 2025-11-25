@@ -105,26 +105,26 @@ void opticalFlowEstimatePosition(void)
     }
 
     // Get raw optical flow rates (rad/s)
-    // MAVLink convention: X is forward, Y is left
-    float flowRateX = opticalflowGetFlowRateX();
-    float flowRateY = opticalflowGetFlowRateY();
+    // Optical flow sensor convention: Y is forward, X is left
+    float flowRateX = opticalflowGetFlowRateX();  // Left/Right from sensor
+    float flowRateY = opticalflowGetFlowRateY();  // Forward/Back from sensor
 
     // Convert flow rates to body-frame velocities (m/s)
     // velocity = flowRate (rad/s) * altitude (m)
-    // IMPORTANT: Apply transformation first, THEN do gyro compensation
-    float velBodyX_raw = flowRateX * altitude;   // Forward velocity (X axis)
-    float velBodyY_raw = flowRateY * altitude;   // Left velocity (Y axis)
+    // Body frame: X is forward, Y is left
+    float velBodyX_raw = flowRateY * altitude;   // Forward velocity (from Y sensor axis)
+    float velBodyY_raw = flowRateX * altitude;   // Left velocity (from X sensor axis)
 
     // *** GYROSCOPIC COMPENSATION ***
-    // Compensate gyro rotation AFTER transformation, on corresponding axes
+    // Compensate gyro rotation on corresponding axes
     // gyro.gyroADCf is in deg/s, convert to rad/s
     const float DEG_TO_RAD = 0.017453292f;
     float gyroRatePitch = gyro.gyroADCf[FD_PITCH] * DEG_TO_RAD; // Pitch rate (rad/s)
     float gyroRateRoll = gyro.gyroADCf[FD_ROLL] * DEG_TO_RAD;   // Roll rate (rad/s)
 
     // Subtract gyro-induced apparent motion from velocities
-    // Pitch rotation affects X velocity (forward/back)
-    // Roll rotation affects Y velocity (left/right)
+    // Pitch rotation affects forward/back velocity (X body frame, from Y sensor)
+    // Roll rotation affects left/right velocity (Y body frame, from X sensor)
     float velBodyX = velBodyX_raw - (gyroRatePitch * altitude);
     float velBodyY = velBodyY_raw - (gyroRateRoll * altitude);
 

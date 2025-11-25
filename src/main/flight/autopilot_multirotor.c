@@ -43,6 +43,7 @@
 
 #ifdef USE_OPTICALFLOW
 #include "flight/optical_flow_poshold.h"
+#include "sensors/opticalflow.h"
 #include "sensors/rangefinder.h"
 #endif
 
@@ -589,9 +590,11 @@ bool positionControlOpticalFlow(void)
 // Check if optical flow is available and healthy
 bool isOpticalFlowAvailable(void)
 {
+    // Check sensor-level availability, not position validity to avoid circular dependency
     return sensors(SENSOR_RANGEFINDER) &&
            rangefinderIsHealthy() &&
-           opticalFlowIsPositionValid();
+           sensors(SENSOR_OPTICALFLOW) &&
+           opticalflowIsValid();  // Sensor-level check, not opticalFlowIsPositionValid()
 }
 #endif // USE_OPTICALFLOW
 
