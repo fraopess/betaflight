@@ -6,7 +6,9 @@
 	],
 	"settings": {
 		"files.associations": {
-			"build_config.h": "c"
+			"build_config.h": "c",
+			"debug.h": "c",
+			"pg.h": "c"
 		}
 	}
 }

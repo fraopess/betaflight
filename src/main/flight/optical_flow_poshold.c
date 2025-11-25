@@ -59,19 +59,6 @@ static positionEstimate_t posEstimate = {
 static pt1Filter_t velocityXFilter;
 static pt1Filter_t velocityYFilter;
 
-// Position hold setpoints and PID state
-static float posHoldSetpointX = 0.0f;
-static float posHoldSetpointY = 0.0f;
-static bool posHoldActive = false;
-
-// PID state for X axis (pitch control)
-static float pidIntegralX = 0.0f;
-static float pidLastErrorX = 0.0f;
-
-// PID state for Y axis (roll control)
-static float pidIntegralY = 0.0f;
-static float pidLastErrorY = 0.0f;
-
 // Configuration
 #define VELOCITY_FILTER_CUTOFF_HZ   5.0f
 #define POSITION_UPDATE_RATE_HZ     50.0f
@@ -96,28 +83,11 @@ void opticalFlowInit(void)
     posEstimate.velocityY = 0.0f;
     posEstimate.altitude = 0.0f;
     posEstimate.valid = false;
-
-    // Reset PID state
-    pidIntegralX = 0.0f;
-    pidLastErrorX = 0.0f;
-    pidIntegralY = 0.0f;
-    pidLastErrorY = 0.0f;
 }
 
 // Update position estimation with optical flow and IMU data
 void opticalFlowUpdate(void)
 {
-    // Check if position hold is active and sticks have moved
-    if (posHoldActive) {
-        // Check if sticks are outside deadband (read from config)
-        float stickDeadband = (float)opticalFlowPosHoldConfig()->stick_deadband;
-        if (fabsf(rcCommand[ROLL]) > stickDeadband ||
-            fabsf(rcCommand[PITCH]) > stickDeadband) {
-            // Deactivate position hold
-            opticalFlowActivatePositionHold(false);
-        }
-    }
-
     // Get optical flow data
     if (!opticalflowIsValid()) {
         posEstimate.valid = false;
@@ -207,114 +177,6 @@ void fuseOpticalFlowWithIMU(float flowX, float flowY, float altitude, float dt)
     // - GPS position (if available)
 }
 
-// Position hold PID controller for X axis (pitch)
-static float calculatePitchAngle(void)
-{
-    if (!posEstimate.valid || !posHoldActive) {
-        // Reset PID state when not active
-        pidIntegralX = 0.0f;
-        pidLastErrorX = 0.0f;
-        return 0.0f;
-    }
-
-    // Calculate position error (setpoint - current)
-    float positionErrorX = posHoldSetpointX - posEstimate.positionX;
-
-    // Read PID gains from config (stored scaled)
-    float kP = (float)opticalFlowPosHoldConfig()->pid_p / 100.0f;  // pid_p is stored * 100
-    float kI = (float)opticalFlowPosHoldConfig()->pid_i / 100.0f;  // pid_i is stored * 100
-    float kD = (float)opticalFlowPosHoldConfig()->pid_d / 100.0f;  // pid_d is stored * 100
-    float iMax = (float)opticalFlowPosHoldConfig()->pid_i_max / 10.0f;  // pid_i_max is stored * 10
-
-    // PID terms
-    float pidP = positionErrorX * kP;
-
-    // Integral term with anti-windup
-    pidIntegralX += positionErrorX * POSITION_UPDATE_DT;
-    pidIntegralX = constrainf(pidIntegralX, -iMax, iMax);
-    float pidI = pidIntegralX * kI;
-
-    // Derivative term (on error)
-    float pidD = ((positionErrorX - pidLastErrorX) / POSITION_UPDATE_DT) * kD;
-    pidLastErrorX = positionErrorX;
-
-    // Calculate total angle command (in degrees)
-    float angleCommand = pidP + pidI + pidD;
-
-    // Constrain to max angle
-    float maxAngle = (float)opticalFlowPosHoldConfig()->max_angle;
-    angleCommand = constrainf(angleCommand, -maxAngle, maxAngle);
-
-    // Update DEBUG_POS_HOLD_OF
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, (int)(opticalFlowIsPositionValid() * 100));  // Valid flag * 100
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, (int)(positionErrorX * 100));                 // Position error X (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, (int)(pidP * 10));                            // PID P term * 10
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, (int)(pidI * 10));                            // PID I term * 10
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, (int)(pidD * 10));                            // PID D term * 10
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 5, (int)(angleCommand * 10));                    // Autopilot angle (decidegrees)
-
-    // Return angle in decidegrees (Betaflight convention)
-    return angleCommand * 10.0f;
-}
-
-// Position hold PID controller for Y axis (roll)
-static float calculateRollAngle(void)
-{
-    if (!posEstimate.valid || !posHoldActive) {
-        // Reset PID state when not active
-        pidIntegralY = 0.0f;
-        pidLastErrorY = 0.0f;
-        return 0.0f;
-    }
-
-    // Calculate position error (setpoint - current)
-    float positionErrorY = posHoldSetpointY - posEstimate.positionY;
-
-    // Read PID gains from config (stored scaled)
-    float kP = (float)opticalFlowPosHoldConfig()->pid_p / 100.0f;  // pid_p is stored * 100
-    float kI = (float)opticalFlowPosHoldConfig()->pid_i / 100.0f;  // pid_i is stored * 100
-    float kD = (float)opticalFlowPosHoldConfig()->pid_d / 100.0f;  // pid_d is stored * 100
-    float iMax = (float)opticalFlowPosHoldConfig()->pid_i_max / 10.0f;  // pid_i_max is stored * 10
-
-    // PID terms
-    float pidP = positionErrorY * kP;
-
-    // Integral term with anti-windup
-    pidIntegralY += positionErrorY * POSITION_UPDATE_DT;
-    pidIntegralY = constrainf(pidIntegralY, -iMax, iMax);
-    float pidI = pidIntegralY * kI;
-
-    // Derivative term (on error)
-    float pidD = ((positionErrorY - pidLastErrorY) / POSITION_UPDATE_DT) * kD;
-    pidLastErrorY = positionErrorY;
-
-    // Calculate total angle command (in degrees)
-    float angleCommand = pidP + pidI + pidD;
-
-    // Constrain to max angle
-    float maxAngle = (float)opticalFlowPosHoldConfig()->max_angle;
-    angleCommand = constrainf(angleCommand, -maxAngle, maxAngle);
-
-    // Return angle in decidegrees (Betaflight convention)
-    return angleCommand * 10.0f;
-}
-
-// Public interface functions
-float getPositionHoldPitchAngle(void)
-{
-    return calculatePitchAngle();
-}
-
-float getPositionHoldRollAngle(void)
-{
-    return calculateRollAngle();
-}
-
-bool isPositionHoldActive(void)
-{
-    return posHoldActive;
-}
-
 // Reset position estimate to zero (called when activating position hold)
 void opticalFlowResetPosition(void)
 {
@@ -326,36 +188,6 @@ void opticalFlowResetPosition(void)
     // Reset filters by clearing their internal state
     velocityXFilter.state = 0.0f;
     velocityYFilter.state = 0.0f;
-
-    // Reset PID state
-    pidIntegralX = 0.0f;
-    pidLastErrorX = 0.0f;
-    pidIntegralY = 0.0f;
-    pidLastErrorY = 0.0f;
-}
-
-// Set target position for position hold
-void opticalFlowSetPositionTarget(float targetX, float targetY)
-{
-    posHoldSetpointX = targetX;
-    posHoldSetpointY = targetY;
-}
-
-// Activate or deactivate position hold mode
-void opticalFlowActivatePositionHold(bool activate)
-{
-    if (activate && !posHoldActive) {
-        // Activating: set current position as target
-        posHoldSetpointX = posEstimate.positionX;
-        posHoldSetpointY = posEstimate.positionY;
-
-        // Reset PID state
-        pidIntegralX = 0.0f;
-        pidLastErrorX = 0.0f;
-        pidIntegralY = 0.0f;
-        pidLastErrorY = 0.0f;
-    }
-    posHoldActive = activate;
 }
 
 // Check if optical flow position is valid

@@ -201,7 +201,8 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
 
     const float altitudeF = targetAltitudeStep * altitudePidCoeffs.Kf;
 
-    const float hoverOffset = autopilotConfig()->hoverThrottle - PWM_RANGE_MIN;
+    const float minThrottle = MAX(rxConfig()->mincheck, PWM_RANGE_MIN);
+    const float hoverOffset = autopilotConfig()->hoverThrottle - minThrottle;
     float throttleOffset = altitudePidP + altitudeI - altitudePidD + altitudeF + hoverOffset;
 
     const float tiltMultiplier = 1.0f / fmaxf(getCosTiltAngle(), 0.5f);
@@ -210,11 +211,11 @@ void altitudeControl(float targetAltitudeCm, float taskIntervalS, float targetAl
 
     throttleOffset *= tiltMultiplier;
 
-    float newThrottle = PWM_RANGE_MIN + throttleOffset;
+    float newThrottle = minThrottle + throttleOffset;
     newThrottle = constrainf(newThrottle, autopilotConfig()->throttleMin, autopilotConfig()->throttleMax);
-    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 0, lrintf(newThrottle)); // normal range 1000-2000 but is before constraint
+    DEBUG_SET(DEBUG_AUTOPILOT_ALTITUDE, 0, lrintf(newThrottle)); // normal range 1000-2000 but is after constraint
 
-    newThrottle = scaleRangef(newThrottle, MAX(rxConfig()->mincheck, PWM_RANGE_MIN), PWM_RANGE_MAX, 0.0f, 1.0f);
+    newThrottle = scaleRangef(newThrottle, minThrottle, PWM_RANGE_MAX, 0.0f, 1.0f);
 
     throttleOut = constrainf(newThrottle, 0.0f, 1.0f);
 
@@ -513,6 +514,9 @@ bool positionControlOpticalFlow(void)
     const float dataInterval = 0.1f;
     const float iTermLeakGain = 1.0f - pt1FilterGainFromDelay(2.5f, dataInterval); // 2.5s time constant
 
+    // Variables to capture X-axis PID components for debug
+    float pidPx = 0.0f, pidIx = 0.0f, pidDx = 0.0f;
+
     for (axisEF_e efAxisIdx = LON; efAxisIdx <= LAT; efAxisIdx++) {
         // P term: position error
         const float pidP = positionError.v[efAxisIdx] * positionPidCoeffs.Kp;
@@ -532,6 +536,13 @@ bool positionControlOpticalFlow(void)
         const float pidD = velocity.v[efAxisIdx] * positionPidCoeffs.Kd;
 
         pidSum.v[efAxisIdx] = pidP + pidI - pidD; // Note: negative D to oppose velocity
+
+        // Capture X-axis (LON) PID components for debug
+        if (efAxisIdx == LON) {
+            pidPx = pidP;
+            pidIx = pidI;
+            pidDx = pidD;
+        }
     }
 
     // Rotate PID output from Earth Frame to Body Frame
@@ -578,13 +589,15 @@ bool positionControlOpticalFlow(void)
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 2, lrintf(pidSum.x * 10));                   // X PID output
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle
 
-    // Debug mode for pos_hold sticks and control
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, ap.sticksActive);                            // Sticks active flag
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(positionError.x));                    // Position error X (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.y));                    // Position error Y (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(anglesBF.x * 10));                    // Roll angle before limit (deg × 10)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(anglesBF.y * 10));                    // Pitch angle before limit (deg × 10)
-    // Note: DEBUG[5], DEBUG[6], DEBUG[7] are set in pos_hold_multirotor.c (stick deflections)
+    // Debug mode for optical flow position hold (X-axis only)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, lrintf(velocity.x));                         // Velocity X input (cm/s)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(posEstimate.positionX * 100.0f));    // Estimated position X (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.x));                    // Position error X (cm)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(pidPx * 10));                         // P component (deg × 10)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(pidIx * 10));                         // I component (deg × 10)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(pidDx * 10));                         // D component (deg × 10)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 6, lrintf(ofAp.integral.x));                    // Integral accumulator X (cm·s)
+    DEBUG_SET(DEBUG_POS_HOLD_OF, 7, ap.sticksActive);                            // Sticks active flag
 
     return true;
 }

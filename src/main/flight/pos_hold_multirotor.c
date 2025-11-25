@@ -73,11 +73,6 @@ static void posHoldCheckSticks(void)
     if (!failsafeIsActive() && posHold.useStickAdjustment) {
         const bool sticksDeflected = (getRcDeflectionAbs(FD_ROLL) > posHold.deadband) || (getRcDeflectionAbs(FD_PITCH) > posHold.deadband);
         setSticksActiveStatus(sticksDeflected);
-
-        // Debug stick deflection values
-        DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(getRcDeflectionAbs(FD_ROLL) * 1000));   // Roll deflection (0-1000)
-        DEBUG_SET(DEBUG_POS_HOLD_OF, 6, lrintf(getRcDeflectionAbs(FD_PITCH) * 1000));  // Pitch deflection (0-1000)
-        DEBUG_SET(DEBUG_POS_HOLD_OF, 7, lrintf(posHold.deadband * 1000));              // Deadband threshold (0-1000)
     }
 }
 

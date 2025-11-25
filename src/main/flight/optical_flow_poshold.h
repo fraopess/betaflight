@@ -34,23 +34,14 @@ typedef struct {
     bool valid;             // Position estimate valid
 } positionEstimate_t;
 
-// Optical flow integration functions
+// Optical flow position estimation functions
 void opticalFlowInit(void);
 void opticalFlowUpdate(void);
 bool opticalFlowGetPosition(positionEstimate_t *estimate);
-
-// Position control functions
 void opticalFlowResetPosition(void);
-void opticalFlowSetPositionTarget(float targetX, float targetY);
-void opticalFlowActivatePositionHold(bool activate);
 bool opticalFlowIsPositionValid(void);
 
-// Flow fusion with IMU
+// Flow fusion with IMU (for future EKF implementation)
 void fuseOpticalFlowWithIMU(float flowX, float flowY, float altitude, float dt);
-
-// Position controller interface - returns autopilot angles
-float getPositionHoldPitchAngle(void);   // Returns pitch angle in decidegrees
-float getPositionHoldRollAngle(void);    // Returns roll angle in decidegrees
-bool isPositionHoldActive(void);
 
 #endif // USE_OPTICALFLOW

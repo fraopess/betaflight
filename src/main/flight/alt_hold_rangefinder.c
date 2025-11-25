@@ -72,6 +72,11 @@ bool rangefinderAltHoldIsValid(void)
         return false;
     }
 
+    // Sanity check: reject readings outside safe operating range (10cm - 1200cm)
+    if (rangefinderAlt < 10 || rangefinderAlt > 1200) {
+        return false;
+    }
+
     // For hybrid sensors (ESP32, MTF-02, etc.), accept rangefinder as soon as we have data > 0
     // For traditional rangefinders, require full validation
     if (rangefinderIsHealthy()) {
@@ -97,9 +102,21 @@ float rangefinderAltHoldGetAltitudeCm(void)
         return -1.0f;  // Invalid
     }
 
+    // Sanity check: reject readings outside safe operating range (10cm - 1200cm)
+    // Below 10cm: too close, likely ground effect or sensor malfunction
+    // Above 1200cm: beyond reliable rangefinder range, fall back to GPS+baro
+    if (rangefinderAlt < 10 || rangefinderAlt > 1200) {
+        return -1.0f;  // Invalid - out of safe range
+    }
+
     // Try to get the processed altitude (with tilt correction, etc.)
     if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
-        return (float)rangefinderGetLatestAltitude();
+        const int32_t calculatedAlt = rangefinderGetLatestAltitude();
+        // Also validate the processed altitude is within range
+        if (calculatedAlt >= 10 && calculatedAlt <= 1200) {
+            return (float)calculatedAlt;
+        }
+        // If calculated altitude is out of range but raw is valid, fall through to use raw
     }
 
     // For hybrid sensors or sensors without full validation, use raw altitude
