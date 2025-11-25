@@ -140,6 +140,8 @@ void updatePosHold(timeUs_t currentTimeUs) {
         // This ensures pilot can ALWAYS regain manual control
         posHoldCheckSticks();
 
+        // Update sensor health status continuously, not just at initialization
+        posHold.areSensorsOk = sensorsOk();
 
         if (posHold.areSensorsOk) {
             // Use the appropriate position controller based on source
@@ -148,6 +150,9 @@ void updatePosHold(timeUs_t currentTimeUs) {
             }
 #ifdef USE_OPTICALFLOW
             else if (posHold.source == POS_HOLD_SOURCE_OPTICAL_FLOW) {
+                // Update position estimate from optical flow sensor data
+                opticalFlowEstimatePosition();
+                // Run position control using the updated estimate
                 posHold.isControlOk = positionControlOpticalFlow();
             }
 #endif

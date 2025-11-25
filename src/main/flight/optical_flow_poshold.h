@@ -36,8 +36,8 @@ typedef struct {
 
 // Optical flow position estimation functions
 void opticalFlowInit(void);
-void opticalFlowUpdate(void);
-bool opticalFlowGetPosition(positionEstimate_t *estimate);
+void opticalFlowEstimatePosition(void);
+bool opticalFlowGetPositionEstimate(positionEstimate_t *estimate);
 void opticalFlowResetPosition(void);
 bool opticalFlowIsPositionValid(void);
 

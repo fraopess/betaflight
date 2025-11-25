@@ -86,7 +86,7 @@ void opticalFlowInit(void)
 }
 
 // Update position estimation with optical flow and IMU data
-void opticalFlowUpdate(void)
+void opticalFlowEstimatePosition(void)
 {
     // Get optical flow data
     if (!opticalflowIsValid()) {
@@ -140,20 +140,10 @@ void opticalFlowUpdate(void)
     posEstimate.altitude = altitude;
     posEstimate.lastUpdate = millis();
     posEstimate.valid = true;
-
-    // Update DEBUG values for blackbox/configurator
-    DEBUG_SET(DEBUG_OPTICALFLOW, 0, (int)(posEstimate.velocityX * 100));  // Body X velocity (cm/s)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 1, (int)(posEstimate.velocityY * 100));  // Body Y velocity (cm/s)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 2, (int)(posEstimate.positionX * 100));  // Body X position (cm)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 3, (int)(posEstimate.positionY * 100));  // Body Y position (cm)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 4, (int)(velBodyX_raw * 100));            // Raw body X velocity before gyro comp (cm/s)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 5, (int)(velBodyY_raw * 100));            // Raw body Y velocity before gyro comp (cm/s)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 6, (int)(gyroRatePitch * 1000));          // Pitch gyro rate (mrad/s)
-    DEBUG_SET(DEBUG_OPTICALFLOW, 7, (int)(gyroRateRoll * 1000));           // Roll gyro rate (mrad/s)
 }
 
 // Get current position estimate
-bool opticalFlowGetPosition(positionEstimate_t *estimate)
+bool opticalFlowGetPositionEstimate(positionEstimate_t *estimate)
 {
     if (!posEstimate.valid) {
         return false;
@@ -168,7 +158,7 @@ void fuseOpticalFlowWithIMU(float flowX, float flowY, float altitude, float dt)
 {
     // This function can be expanded to implement more sophisticated
     // sensor fusion algorithms like Extended Kalman Filter (EKF)
-    // For now, we use the simpler integration in opticalFlowUpdate()
+    // For now, we use the simpler integration in opticalFlowEstimatePosition()
 
     // Future: Implement EKF fusion with:
     // - Optical flow velocity

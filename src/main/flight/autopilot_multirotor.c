@@ -493,7 +493,7 @@ bool positionControlOpticalFlow(void)
 
     // Get current position estimate from optical flow (in m, convert to cm)
     positionEstimate_t posEstimate;
-    if (!opticalFlowGetPosition(&posEstimate)) {
+    if (!opticalFlowGetPositionEstimate(&posEstimate)) {
         return false;
     }
 

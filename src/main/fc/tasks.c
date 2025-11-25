@@ -303,11 +303,6 @@ static void taskUpdateRangefinder(timeUs_t currentTimeUs)
     rangefinderUpdate();
 
     rangefinderProcess(getCosTiltAngle());
-
-#ifdef USE_OPTICALFLOW
-    // Update optical flow position estimation (ESP32Cam-TFMini has integrated optical flow)
-    opticalFlowUpdate();
-#endif
 }
 #endif
 
@@ -320,7 +315,7 @@ static void taskUpdateOpticalflow(timeUs_t currentTimeUs)
         return;
     }
 
-    opticalflowUpdate();
+    opticalflowReadSensor();
     opticalflowProcess();
 }
 #endif
@@ -580,7 +575,12 @@ void tasksInit(void)
 #endif
 
 #ifdef USE_POSITION_HOLD
-    setTaskEnabled(TASK_POSHOLD, featureIsEnabled(FEATURE_GPS));
+    // Enable POSHOLD task when GPS OR optical flow is available
+    bool posHoldSensorAvailable = featureIsEnabled(FEATURE_GPS);
+#ifdef USE_OPTICALFLOW
+    posHoldSensorAvailable |= sensors(SENSOR_OPTICALFLOW);
+#endif
+    setTaskEnabled(TASK_POSHOLD, posHoldSensorAvailable);
 #endif
 
 #ifdef USE_MAG

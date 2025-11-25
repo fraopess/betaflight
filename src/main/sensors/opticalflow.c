@@ -156,7 +156,7 @@ bool opticalflowInit(void) {
     return true;
 }
 
-void opticalflowUpdate(void) {
+void opticalflowReadSensor(void) {
     if (opticalflow.dev.update) {
         opticalflow.dev.update(&opticalflow.dev);
     }
