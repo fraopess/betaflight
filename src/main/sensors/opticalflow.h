@@ -60,4 +60,18 @@ void opticalflowProcess(void);
 // Generic optical flow data access for position hold
 float opticalflowGetFlowRateX(void);
 float opticalflowGetFlowRateY(void);
+
+// Validation functions with clear hierarchy
+bool opticalflowHasData(void);
 bool opticalflowIsValid(void);
+
+// Diagnostic struct for debugging/blackbox analysis
+typedef struct {
+    bool hardwareResponding;   // Within 100ms timeout
+    bool hasData;              // Quality > 0
+    bool fullyValid;           // Both checks pass
+    int16_t quality;           // Current quality value
+    uint32_t lastUpdateUs;     // Timestamp of last update
+} opticalflowState_t;
+
+void opticalflowGetState(opticalflowState_t *state);

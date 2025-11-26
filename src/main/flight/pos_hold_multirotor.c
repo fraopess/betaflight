@@ -116,8 +116,15 @@ void updatePosHold(timeUs_t currentTimeUs) {
             // Check which sensor source is available
             posHold.areSensorsOk = sensorsOk();
 
+            // CRITICAL FIX: Always set isEnabled=true so recovery code can run
+            // even if sensors are not available on initial mode activation
+            posHold.isEnabled = true;
+
+            // Reset sticks state when entering POS_HOLD mode
+            setSticksActiveStatus(false);
+
             if (posHold.areSensorsOk) {
-                // Initialize the appropriate controller
+                // Initialize the appropriate controller if sensors are ready
                 if (posHold.source == POS_HOLD_SOURCE_GPS) {
                     resetPositionControl(&gpsSol.llh, POSHOLD_TASK_RATE_HZ);
                 }
@@ -127,20 +134,22 @@ void updatePosHold(timeUs_t currentTimeUs) {
                 }
 #endif
                 posHold.isControlOk = true;
-                posHold.isEnabled = true;
+            } else {
+                // Sensors not ready yet, wait for recovery
+                posHold.isControlOk = false;
             }
         }
     } else {
         posHold.isEnabled = false;
         posHold.source = POS_HOLD_SOURCE_NONE;
+        // CRITICAL FIX: Reset sticks state when exiting POS_HOLD mode
+        setSticksActiveStatus(false);
     }
 
-    if (posHold.isEnabled && posHold.isControlOk) {
-        // CRITICAL: Always check sticks first, even if sensors fail
-        // This ensures pilot can ALWAYS regain manual control
-        posHoldCheckSticks();
-
-        // Update sensor health status continuously, not just at initialization
+    // Monitor sensor health and handle recovery - runs ALWAYS when POS_HOLD is enabled
+    // This is outside the isControlOk condition so recovery can happen even when control failed
+    if (posHold.isEnabled) {
+        // Update sensor health status continuously
         const bool previousSensorsOk = posHold.areSensorsOk;
         posHold.areSensorsOk = sensorsOk();
 
@@ -159,7 +168,16 @@ void updatePosHold(timeUs_t currentTimeUs) {
                 resetPositionControlOpticalFlow(POSHOLD_TASK_RATE_HZ);
             }
 #endif
+            // CRITICAL: Restore control state when sensors recover
+            posHold.isControlOk = true;
         }
+    }
+
+    // Run position control if enabled and control is OK
+    if (posHold.isEnabled && posHold.isControlOk) {
+        // CRITICAL: Always check sticks first, even if sensors fail
+        // This ensures pilot can ALWAYS regain manual control
+        posHoldCheckSticks();
 
         if (posHold.areSensorsOk) {
             // Use the appropriate position controller based on source
@@ -177,6 +195,10 @@ void updatePosHold(timeUs_t currentTimeUs) {
             else {
                 posHold.isControlOk = false;
             }
+        } else {
+            // Sensors not OK - disable control but keep POS_HOLD mode active
+            // This allows recovery when sensors come back (handled above)
+            posHold.isControlOk = false;
         }
     }
 }

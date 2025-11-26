@@ -222,8 +222,33 @@ float opticalflowGetFlowRateY(void) {
     return opticalflow.rawFlowRates.y;
 }
 
+/**
+ * Check if optical flow sensor has valid data (quality > 0)
+ * Quality > 0 means sensor is providing valid flow measurements
+ */
+bool opticalflowHasData(void) {
+    return opticalflow.quality > 0;
+}
+
+/**
+ * Check if optical flow is currently providing valid data
+ * Combines hardware health (timeout) and data availability (quality)
+ * No timeout fallback - pure data-driven validation for immediate recovery
+ */
 bool opticalflowIsValid(void) {
-    return isOpticalflowHealthy() && (opticalflow.quality > 0);
+    return isOpticalflowHealthy() && opticalflowHasData();
+}
+
+/**
+ * Get detailed optical flow sensor state for debugging/diagnostics
+ * Useful for OSD warnings, blackbox analysis, and troubleshooting
+ */
+void opticalflowGetState(opticalflowState_t *state) {
+    state->hardwareResponding = isOpticalflowHealthy();
+    state->hasData = opticalflowHasData();
+    state->fullyValid = state->hardwareResponding && state->hasData;
+    state->quality = opticalflow.quality;
+    state->lastUpdateUs = opticalflow.timeStampUs;
 }
 
 #endif // USE_OPTICALFLOW

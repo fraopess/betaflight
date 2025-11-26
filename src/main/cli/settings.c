@@ -1866,6 +1866,7 @@ const clivalue_t valueTable[] = {
     { PARAM_NAME_OF_POSHOLD_PID_D,            VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_d) },
     { PARAM_NAME_OF_POSHOLD_PID_I_MAX,        VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, pid_i_max) },
     { PARAM_NAME_OF_POSHOLD_STICK_DEADBAND,   VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, stick_deadband) },
+    { PARAM_NAME_OF_POSHOLD_GYRO_COMP_SCALE,  VAR_UINT8  | MASTER_VALUE, .config.minmaxUnsigned = {0, 100}, PG_OF_POSHOLD_CONFIG, offsetof(opticalFlowPosHoldConfig_t, gyro_comp_scale) },
 #endif
 
 // PG_PINIO_CONFIG

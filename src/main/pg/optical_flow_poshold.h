@@ -35,6 +35,7 @@ typedef struct opticalFlowPosHoldConfig_s {
     uint8_t pid_d;                  // D gain * 100 (default 5 = 0.05)
     uint8_t pid_i_max;              // I max * 10 (default 100 = 10.0)
     uint8_t stick_deadband;         // Stick deadband for position hold deactivation (default 12)
+    uint8_t gyro_comp_scale;        // Gyro compensation scale 0-100% (default 10 = 10%)
 } opticalFlowPosHoldConfig_t;
 
 PG_DECLARE(opticalFlowPosHoldConfig_t, opticalFlowPosHoldConfig);

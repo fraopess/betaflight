@@ -275,6 +275,7 @@
 #define PARAM_NAME_OF_POSHOLD_PID_D "of_poshold_pid_d"
 #define PARAM_NAME_OF_POSHOLD_PID_I_MAX "of_poshold_pid_i_max"
 #define PARAM_NAME_OF_POSHOLD_STICK_DEADBAND "of_poshold_stick_deadband"
+#define PARAM_NAME_OF_POSHOLD_GYRO_COMP_SCALE "of_poshold_gyro_comp_scale"
 #endif
 
 #define PARAM_NAME_IMU_DCM_KP "imu_dcm_kp"

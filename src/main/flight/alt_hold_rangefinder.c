@@ -36,6 +36,7 @@
 #include "sensors/sensors.h"
 #include "common/filter.h"
 #include "common/maths.h"
+#include "fc/runtime_config.h"
 
 // Rangefinder altitude hold state
 typedef struct {
@@ -60,68 +61,35 @@ void rangefinderAltHoldInit(void)
 }
 
 // Check if rangefinder is valid for altitude hold
-// This provides a generic validation that works for all rangefinder types
+// Uses centralized validation for consistency with position hold
 bool rangefinderAltHoldIsValid(void)
 {
-    if (!sensors(SENSOR_RANGEFINDER)) {
-        return false;
-    }
-
-    const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
-    if (rangefinderAlt <= 0) {
-        return false;
-    }
-
-    // Sanity check: reject readings outside safe operating range (10cm - 1200cm)
-    if (rangefinderAlt < 10 || rangefinderAlt > 1200) {
-        return false;
-    }
-
-    // For hybrid sensors (ESP32, MTF-02, etc.), accept rangefinder as soon as we have data > 0
-    // For traditional rangefinders, require full validation
-    if (rangefinderIsHealthy()) {
-        // If sensor is healthy, it's valid
-        return true;
-    }
-
-    // Check if this might be a hybrid sensor by checking if it's providing data
-    // even without full surface validation
-    // This is a heuristic: if we have consistent raw data, trust it
-    return (rangefinderAlt > 0);
+    // Delegate to centralized validation
+    // This ensures consistency across altitude hold and position hold
+    // and uses CLI-configurable range limits
+    return sensors(SENSOR_RANGEFINDER) && rangefinderIsValid();
 }
 
 // Get rangefinder altitude in centimeters
 float rangefinderAltHoldGetAltitudeCm(void)
 {
-    if (!sensors(SENSOR_RANGEFINDER)) {
-        return -1.0f;  // Invalid
-    }
-
-    const int32_t rangefinderAlt = rangefinderGetLatestRawAltitude();
-    if (rangefinderAlt <= 0) {
-        return -1.0f;  // Invalid
-    }
-
-    // Sanity check: reject readings outside safe operating range (10cm - 1200cm)
-    // Below 10cm: too close, likely ground effect or sensor malfunction
-    // Above 1200cm: beyond reliable rangefinder range, fall back to GPS+baro
-    if (rangefinderAlt < 10 || rangefinderAlt > 1200) {
-        return -1.0f;  // Invalid - out of safe range
+    // Use centralized validation - ensures consistency
+    if (!rangefinderIsValid()) {
+        return -1.0f;  // Invalid: no data or out of range
     }
 
     // Try to get the processed altitude (with tilt correction, etc.)
     if (rangefinderIsHealthy() && rangefinderIsSurfaceAltitudeValid()) {
         const int32_t calculatedAlt = rangefinderGetLatestAltitude();
-        // Also validate the processed altitude is within range
-        if (calculatedAlt >= 10 && calculatedAlt <= 1200) {
+        // Validate processed altitude is also in valid range (uses CLI config)
+        if (calculatedAlt >= rangefinderConfig()->min_valid_altitude_cm &&
+            calculatedAlt <= rangefinderConfig()->max_valid_altitude_cm) {
             return (float)calculatedAlt;
         }
-        // If calculated altitude is out of range but raw is valid, fall through to use raw
     }
 
-    // For hybrid sensors or sensors without full validation, use raw altitude
-    // This ensures immediate response when entering ALT_HOLD mode
-    return (float)rangefinderAlt;
+    // Fall back to raw altitude (already validated by rangefinderIsValid())
+    return (float)rangefinderGetLatestRawAltitude();
 }
 
 // Get rangefinder altitude derivative (velocity) in cm/s

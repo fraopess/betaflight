@@ -79,6 +79,8 @@ PG_REGISTER_WITH_RESET_TEMPLATE(rangefinderConfig_t, rangefinderConfig, PG_RANGE
 
 PG_RESET_TEMPLATE(rangefinderConfig_t, rangefinderConfig,
     .rangefinder_hardware = RANGEFINDER_NONE,
+    .min_valid_altitude_cm = 10,    // 10cm minimum (too close, ground effect)
+    .max_valid_altitude_cm = 1200,  // 1200cm = 12m maximum (sensor range limit)
 );
 
 #ifdef USE_RANGEFINDER_HCSR04
@@ -397,6 +399,56 @@ int32_t rangefinderGetLatestRawAltitude(void)
 bool rangefinderIsHealthy(void)
 {
     return (millis() - rangefinder.lastValidResponseTimeMs) < RANGEFINDER_HARDWARE_TIMEOUT_MS;
+}
+
+/**
+ * Check if rangefinder has valid data available (not out-of-range or hardware failure)
+ * Returns true if sensor is providing a measurement, regardless of range or timeout
+ */
+bool rangefinderHasData(void)
+{
+    // Valid data means we have a positive reading (not error codes like -1 or -2)
+    return rangefinder.rawAltitude > 0;
+}
+
+/**
+ * Check if rangefinder data is within valid operating range
+ * This is the SINGLE SOURCE OF TRUTH for range validation
+ * Uses CLI-configurable min/max altitude parameters
+ */
+bool rangefinderIsInValidRange(void)
+{
+    // Only validate range if we have data
+    if (rangefinder.rawAltitude <= 0) {
+        return false;
+    }
+
+    // Use configurable limits from CLI parameters
+    return (rangefinder.rawAltitude >= rangefinderConfig()->min_valid_altitude_cm &&
+            rangefinder.rawAltitude <= rangefinderConfig()->max_valid_altitude_cm);
+}
+
+/**
+ * Check if rangefinder is currently providing valid, in-range data
+ * This combines data availability and range checks for immediate validation
+ * No timeout fallback - pure data-driven validation for immediate recovery
+ */
+bool rangefinderIsValid(void)
+{
+    return rangefinderHasData() && rangefinderIsInValidRange();
+}
+
+/**
+ * Get detailed sensor state for debugging/diagnostics
+ * Useful for OSD warnings, blackbox analysis, and troubleshooting
+ */
+void rangefinderGetState(rangefinderState_t *state)
+{
+    state->hardwareResponding = rangefinderIsHealthy();
+    state->hasData = rangefinderHasData();
+    state->inValidRange = rangefinderIsInValidRange();
+    state->fullyValid = state->hasData && state->inValidRange;
+    state->rawAltitude = rangefinder.rawAltitude;
 }
 #endif
 

@@ -575,14 +575,15 @@ bool positionControlOpticalFlow(void)
     DEBUG_SET(DEBUG_AUTOPILOT_POSITION, 3, lrintf(autopilotAngle[AI_PITCH] * 10));  // Pitch angle after upsampling (deg × 10)
 
     // Debug mode for optical flow position hold (X-axis body frame only)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 0, lrintf(velocity.x));                         // Velocity X forward (cm/s)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(posEstimate.positionX * 100.0f));    // Estimated position X forward (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.x));                    // Position error X forward (cm)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(pidPx * 10));                         // P component (deg × 10)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(pidIx * 10));                         // I component (deg × 10)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(pidDx * 10));                         // D component (deg × 10)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 6, lrintf(ofAp.integral.x));                    // Integral accumulator X (cm·s)
-    DEBUG_SET(DEBUG_POS_HOLD_OF, 7, ap.sticksActive);                            // Sticks active flag
+    // TEMPORARILY COMMENTED - Debug moved to optical_flow_poshold.c to show velocity processing stages
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 0, lrintf(velocity.x));                         // Velocity X forward (cm/s)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 1, lrintf(posEstimate.positionX * 100.0f));    // Estimated position X forward (cm)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 2, lrintf(positionError.x));                    // Position error X forward (cm)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 3, lrintf(pidPx * 10));                         // P component (deg × 10)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 4, lrintf(pidIx * 10));                         // I component (deg × 10)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 5, lrintf(pidDx * 10));                         // D component (deg × 10)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 6, lrintf(ofAp.integral.x));                    // Integral accumulator X (cm·s)
+    // DEBUG_SET(DEBUG_POS_HOLD_OF, 7, ap.sticksActive);                            // Sticks active flag
 
     return true;
 }
@@ -590,11 +591,18 @@ bool positionControlOpticalFlow(void)
 // Check if optical flow is available and healthy
 bool isOpticalFlowAvailable(void)
 {
-    // Check sensor-level availability, not position validity to avoid circular dependency
-    return sensors(SENSOR_RANGEFINDER) &&
-           rangefinderIsHealthy() &&
-           sensors(SENSOR_OPTICALFLOW) &&
-           opticalflowIsValid();  // Sensor-level check, not opticalFlowIsPositionValid()
+    // Clear separation of concerns: data available AND in range
+    // Immediate response to data state changes - NO OR masking for immediate recovery
+
+    // Rangefinder: must have data AND be in valid range (configurable via CLI)
+    // Uses centralized validation - single source of truth
+    bool rangefinderOk = sensors(SENSOR_RANGEFINDER) && rangefinderIsValid();
+
+    // Optical flow: must have recent data (100ms timeout) with quality > 0
+    // Uses centralized validation hierarchy
+    bool opticalFlowOk = sensors(SENSOR_OPTICALFLOW) && opticalflowIsValid();
+
+    return rangefinderOk && opticalFlowOk;
 }
 #endif // USE_OPTICALFLOW
 

@@ -42,6 +42,8 @@ typedef enum {
 
 typedef struct rangefinderConfig_s {
     uint8_t rangefinder_hardware;
+    uint16_t min_valid_altitude_cm;  // Minimum valid altitude for position hold (default: 10cm)
+    uint16_t max_valid_altitude_cm;  // Maximum valid altitude for position hold (default: 1200cm)
 } rangefinderConfig_t;
 
 PG_DECLARE(rangefinderConfig_t, rangefinderConfig);
@@ -69,3 +71,19 @@ void rangefinderUpdate(void);
 bool rangefinderProcess(float cosTiltAngle);
 bool rangefinderIsHealthy(void);
 bool rangefinderIsSurfaceAltitudeValid(void);
+
+// New validation functions for clear hierarchy
+bool rangefinderHasData(void);
+bool rangefinderIsInValidRange(void);
+bool rangefinderIsValid(void);
+
+// Diagnostic struct for debugging/blackbox analysis
+typedef struct {
+    bool hardwareResponding;   // Sensor within 500ms timeout
+    bool hasData;              // rawAltitude > 0
+    bool inValidRange;         // Within configured min/max
+    bool fullyValid;           // All checks pass
+    int32_t rawAltitude;       // Current reading
+} rangefinderState_t;
+
+void rangefinderGetState(rangefinderState_t *state);
